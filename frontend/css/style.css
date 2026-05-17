@@ -1,0 +1,362 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #1a1a2e;
+    color: #e0e0e0;
+    overflow: hidden;
+    height: 100vh;
+}
+
+#app {
+    display: flex;
+    height: 100vh;
+    width: 100vw;
+}
+
+/* ===== КАРТА ===== */
+#map {
+    flex: 1;
+    height: 100vh;
+}
+
+/* ===== ЧАТ ПАНЕЛЬ ===== */
+#chat-panel {
+    width: 380px;
+    min-width: 380px;
+    height: 100vh;
+    background: rgba(22, 22, 40, 0.97);
+    backdrop-filter: blur(20px);
+    border-left: 1px solid rgba(255,255,255,0.08);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.chat-header {
+    padding: 20px;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+
+.chat-logo {
+    font-size: 20px;
+    font-weight: 700;
+    color: #fff;
+}
+
+/* ===== ПОИСК ===== */
+.search-box {
+    padding: 12px 16px;
+    position: relative;
+}
+
+.search-box input {
+    width: 100%;
+    padding: 10px 14px;
+    border-radius: 10px;
+    border: 1px solid rgba(255,255,255,0.12);
+    background: rgba(255,255,255,0.06);
+    color: #fff;
+    font-size: 14px;
+    outline: none;
+    transition: border 0.2s;
+}
+
+.search-box input:focus {
+    border-color: #667eea;
+}
+
+#search-results {
+    position: absolute;
+    top: 52px;
+    left: 16px;
+    right: 16px;
+    background: #2a2a4a;
+    border-radius: 10px;
+    z-index: 100;
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.search-item {
+    padding: 10px 14px;
+    cursor: pointer;
+    font-size: 13px;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+    transition: background 0.15s;
+}
+
+.search-item:hover {
+    background: rgba(102,126,234,0.2);
+}
+
+/* ===== КНОПКИ ===== */
+.btn-primary {
+    margin: 8px 16px;
+    padding: 12px;
+    border: none;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    color: white;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.2s;
+}
+
+.btn-primary:hover {
+    opacity: 0.85;
+}
+
+.btn-primary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.btn-secondary {
+    margin: 8px 16px;
+    padding: 10px;
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 10px;
+    background: transparent;
+    color: #ccc;
+    font-size: 13px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.btn-secondary:hover {
+    background: rgba(255,255,255,0.08);
+}
+
+/* ===== БЫСТРЫЕ ВОПРОСЫ ===== */
+#quick-questions {
+    padding: 8px 16px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.btn-quick {
+    padding: 6px 12px;
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 20px;
+    background: transparent;
+    color: #aaa;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-quick:hover {
+    background: rgba(102,126,234,0.2);
+    border-color: #667eea;
+    color: #fff;
+}
+
+/* ===== ОЦЕНКИ ===== */
+#scores-panel {
+    padding: 12px 16px;
+}
+
+.score-badge {
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    border-radius: 14px;
+    padding: 16px;
+    text-align: center;
+    margin-bottom: 12px;
+}
+
+.score-big {
+    font-size: 36px;
+    font-weight: 700;
+    color: #fff;
+}
+
+.score-sub {
+    font-size: 11px;
+    color: rgba(255,255,255,0.7);
+    margin-top: 2px;
+}
+
+.metric {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 5px 0;
+    font-size: 13px;
+}
+
+.metric-label {
+    color: #aaa;
+}
+
+.metric-value {
+    font-weight: 600;
+    color: #fff;
+    width: 35px;
+    text-align: right;
+}
+
+.metric-bar-bg {
+    flex: 1;
+    height: 5px;
+    background: rgba(255,255,255,0.08);
+    border-radius: 3px;
+    margin: 0 10px;
+    overflow: hidden;
+}
+
+.metric-bar-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.5s ease;
+}
+
+/* ===== СООБЩЕНИЯ ===== */
+#chat-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px 16px;
+}
+
+.message {
+    margin-bottom: 12px;
+    animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.msg-assistant {
+    background: rgba(102,126,234,0.12);
+    border-radius: 14px 14px 14px 4px;
+    padding: 12px 14px;
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+.msg-user {
+    background: rgba(255,255,255,0.08);
+    border-radius: 14px 14px 4px 14px;
+    padding: 10px 14px;
+    font-size: 14px;
+    text-align: right;
+}
+
+.msg-loading {
+    color: #667eea;
+    font-size: 13px;
+    padding: 8px 0;
+}
+
+/* ===== ВВОД ===== */
+.chat-input-box {
+    padding: 12px 16px;
+    border-top: 1px solid rgba(255,255,255,0.08);
+    display: flex;
+    gap: 8px;
+}
+
+.chat-input-box input {
+    flex: 1;
+    padding: 10px 14px;
+    border-radius: 10px;
+    border: 1px solid rgba(255,255,255,0.12);
+    background: rgba(255,255,255,0.06);
+    color: #fff;
+    font-size: 14px;
+    outline: none;
+}
+
+.chat-input-box input:focus {
+    border-color: #667eea;
+}
+
+#send-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    border: none;
+    background: #667eea;
+    color: white;
+    font-size: 18px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+#send-btn:hover {
+    background: #764ba2;
+}
+
+/* ===== ОТЧЁТ МОДАЛЬНОЕ ===== */
+#report-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0,0,0,0.75);
+    z-index: 10000;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    animation: fadeIn 0.3s ease;
+}
+
+.report-content {
+    background: #1e1e36;
+    border-radius: 20px;
+    padding: 32px;
+    max-width: 800px;
+    width: 90%;
+    max-height: 85vh;
+    overflow-y: auto;
+    position: relative;
+    line-height: 1.6;
+    font-size: 15px;
+}
+
+.report-content h2 {
+    color: #667eea;
+    margin: 20px 0 8px 0;
+    font-size: 18px;
+}
+
+.report-close {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(255,255,255,0.1);
+    color: #fff;
+    font-size: 18px;
+    cursor: pointer;
+}
+
+.report-close:hover {
+    background: rgba(255,255,255,0.2);
+}
+
+/* ===== SCROLLBAR ===== */
+::-webkit-scrollbar {
+    width: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: rgba(255,255,255,0.15);
+    border-radius: 3px;
+}
