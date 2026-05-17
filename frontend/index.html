@@ -12,6 +12,7 @@
     <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
 <div id="app">
@@ -19,20 +20,24 @@
     <div id="chat-panel">
         <div class="chat-header">
             <div class="chat-logo">🏘️ AI-урбанист</div>
+            <div id="user-info" style="display:none;">
+                <span id="user-email-short" style="font-size:12px;color:#aaa;"></span>
+                <button class="btn-auth" onclick="signOut()">Выйти</button>
+            </div>
             <button id="auth-btn" class="btn-auth" onclick="toggleAuth()">Войти</button>
         </div>
         <div class="search-box">
-            <input type="text" id="search-input" placeholder="Поиск улицы, адреса, заведения...">
+            <input type="text" id="search-input" placeholder="Поиск улицы, адреса...">
             <div id="search-results"></div>
         </div>
         <button id="analyze-btn" class="btn-primary" style="display:none;" onclick="analyzeArea()">Анализировать район</button>
         <div id="scores-panel" style="display:none;"></div>
         <button id="report-btn" class="btn-secondary" style="display:none;" onclick="generateReport()">Полный отчёт</button>
         <div id="quick-questions" style="display:none;">
-            <button class="btn-quick" onclick="askQuick('Какой бизнес открыть?')">Бизнес?</button>
-            <button class="btn-quick" onclick="askQuick('Безопасно ли тут?')">Безопасно?</button>
-            <button class="btn-quick" onclick="askQuick('Подходит для семьи?')">Для семьи?</button>
-            <button class="btn-quick" onclick="askQuick('Чего не хватает?')">Чего нет?</button>
+            <button class="btn-quick" onclick="askQuick(\'Какой бизнес открыть?\')">Бизнес?</button>
+            <button class="btn-quick" onclick="askQuick(\'Безопасно ли тут?\')">Безопасно?</button>
+            <button class="btn-quick" onclick="askQuick(\'Подходит для семьи?\')">Для семьи?</button>
+            <button class="btn-quick" onclick="askQuick(\'Чего не хватает?\')">Чего нет?</button>
         </div>
         <div id="chat-messages"></div>
         <div class="chat-input-box">
@@ -40,61 +45,63 @@
             <button id="send-btn" onclick="sendMessage()">→</button>
         </div>
     </div>
+
     <div id="report-modal" style="display:none;">
         <div class="report-content" id="report-export-area">
             <div class="report-header">
                 <button class="report-close" onclick="closeReport()">✕</button>
-                <button class="btn-pdf" onclick="exportPDF()">📄 Скачать PDF</button>
+                <button class="btn-pdf" onclick="exportPDF()">📄 PDF</button>
             </div>
             <div id="report-charts">
-                <div class="chart-box">
-                    <canvas id="pieChart"></canvas>
-                </div>
-                <div class="chart-box">
-                    <canvas id="radarChart"></canvas>
-                </div>
+                <div class="chart-box"><canvas id="pieChart"></canvas></div>
+                <div class="chart-box"><canvas id="radarChart"></canvas></div>
             </div>
-            <div class="chart-box-full">
-                <canvas id="barChart"></canvas>
-            </div>
+            <div class="chart-box-full"><canvas id="barChart"></canvas></div>
             <div id="report-future-charts">
                 <div class="future-chart">
                     <div class="future-icon">📊</div>
                     <div class="future-label">Scatter Plot: рейтинг vs популярность</div>
-                    <div class="future-note">Доступно после подключения отзывов</div>
+                    <div class="future-note">После подключения отзывов</div>
                 </div>
                 <div class="future-chart">
                     <div class="future-icon">☁️</div>
                     <div class="future-label">Облако слов из отзывов</div>
-                    <div class="future-note">Доступно после подключения отзывов</div>
+                    <div class="future-note">После подключения отзывов</div>
                 </div>
                 <div class="future-chart">
                     <div class="future-icon">📈</div>
                     <div class="future-label">Тренд качества за год</div>
-                    <div class="future-note">Доступно после подключения отзывов</div>
+                    <div class="future-note">После подключения отзывов</div>
                 </div>
             </div>
             <div id="report-text"></div>
         </div>
     </div>
+
     <div id="auth-modal" style="display:none;">
         <div class="auth-content">
             <button class="report-close" onclick="toggleAuth()">✕</button>
-            <h2>Вход в аккаунт</h2>
-            <p class="auth-subtitle">Войдите для сохранения отчётов</p>
-            <button class="btn-social btn-google" onclick="socialLogin('google')">Google</button>
-            <button class="btn-social btn-apple" onclick="socialLogin('apple')">Apple</button>
-            <button class="btn-social btn-discord" onclick="socialLogin('discord')">Discord</button>
-            <button class="btn-social btn-facebook" onclick="socialLogin('facebook')">Facebook</button>
-            <button class="btn-social btn-microsoft" onclick="socialLogin('microsoft')">Microsoft</button>
-            <div class="auth-divider"><span>или</span></div>
-            <input type="email" id="auth-email" placeholder="Email" class="auth-input">
-            <input type="password" id="auth-password" placeholder="Пароль" class="auth-input">
-            <button class="btn-primary" onclick="emailLogin()" style="margin:8px 0;width:100%">Войти по email</button>
-            <p class="auth-note">Регистрация автоматически при первом входе</p>
+            <div id="auth-form-login">
+                <h2>Вход в аккаунт</h2>
+                <p class="auth-subtitle">Сохраняйте отчёты и историю</p>
+                <button class="btn-social btn-google" onclick="socialLogin(\'google\')">
+                    🔵 Войти через Google
+                </button>
+                <div class="auth-divider"><span>или по email</span></div>
+                <input type="email" id="auth-email" placeholder="Email" class="auth-input">
+                <input type="password" id="auth-password" placeholder="Пароль (мин. 6 символов)" class="auth-input">
+                <div id="auth-error" style="color:#f44336;font-size:12px;margin:4px 0;"></div>
+                <button class="btn-primary" onclick="emailSignIn()" style="margin:8px 0;width:100%">Войти</button>
+                <button class="btn-secondary" onclick="emailSignUp()" style="width:calc(100% - 32px)">Зарегистрироваться</button>
+                <button class="btn-link" onclick="resetPassword()">Забыли пароль?</button>
+            </div>
         </div>
     </div>
 </div>
+<script>
+    const SUPABASE_URL = "https://epjtzfhlyyrzmcjqqlyw.supabase.co";
+    const SUPABASE_KEY = "sb_publishable_yj38_Ym2C8_Sm-MN-icfSw_URGS-h-J";
+</script>
 <script src="/js/app.js"></script>
 </body>
 </html>
