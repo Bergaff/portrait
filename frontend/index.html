@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Портрет квартала</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js">
+</head>
+<body>
+
+<div id="app">
+    <!-- КАРТА -->
+    <div id="map"></div>
+
+    <!-- ЧАТ ПАНЕЛЬ -->
+    <div id="chat-panel">
+        <div class="chat-header">
+            <div class="chat-logo">🏘️ AI-урбанист</div>
+        </div>
+
+        <!-- ПОИСК -->
+        <div class="search-box">
+            <input type="text" id="search-input" placeholder="Поиск улицы или адреса...">
+            <div id="search-results"></div>
+        </div>
+
+        <!-- КНОПКА АНАЛИЗА -->
+        <button id="analyze-btn" class="btn-primary" style="display:none;">
+            Анализировать район
+        </button>
+
+        <!-- ОЦЕНКИ -->
+        <div id="scores-panel" style="display:none;"></div>
+
+        <!-- КНОПКА ОТЧЁТА -->
+        <button id="report-btn" class="btn-secondary" style="display:none;">
+            Полный отчёт
+        </button>
+
+        <!-- БЫСТРЫЕ ВОПРОСЫ -->
+        <div id="quick-questions" style="display:none;">
+            <button class="btn-quick" onclick="askQuick('Какой бизнес открыть?')">Какой бизнес?</button>
+            <button class="btn-quick" onclick="askQuick('Безопасно ли тут?')">Безопасно?</button>
+            <button class="btn-quick" onclick="askQuick('Подходит для семьи?')">Для семьи?</button>
+            <button class="btn-quick" onclick="askQuick('Чего не хватает?')">Чего нет?</button>
+        </div>
+
+        <!-- СООБЩЕНИЯ -->
+        <div id="chat-messages"></div>
+
+        <!-- ВВОД -->
+        <div class="chat-input-box">
+            <input type="text" id="chat-input" placeholder="Спросите про район...">
+            <button id="send-btn" onclick="sendMessage()">→</button>
+        </div>
+    </div>
+
+    <!-- ОТЧЁТ (МОДАЛЬНОЕ ОКНО) -->
+    <div id="report-modal" style="display:none;">
+        <div class="report-content">
+            <button class="report-close" onclick="closeReport()">✕</button>
+            <div id="report-text"></div>
+        </div>
+    </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
+<script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
+<script src="/js/app.js"></script>
+</body>
+</html>
