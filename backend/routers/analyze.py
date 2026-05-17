@@ -7,32 +7,6 @@ router = APIRouter()
 class AnalyzeRequest(BaseModel):
     bbox: str
 
-class OrgItem(BaseModel):
-    name: str
-    amenity: str
-    cuisine: str
-    lat: float
-    lon: float
-
-class ScoreItem(BaseModel):
-    overall: int
-    density: int
-    food: int
-    health: int
-    sport: int
-    education: int
-    shopping: int
-    entertainment: int
-    diversity: int
-    area_km2: float
-    total_places: int
-
-class AnalyzeResponse(BaseModel):
-    organizations: list
-    scores: dict
-    categories: dict
-    org_text: str
-
 def query_overpass(bbox):
     q = "[out:json][timeout:25];("
     q += 'node["amenity"~"cafe|restaurant|bar|pharmacy|bank|clinic|gym|beauty|fast_food|pub|hotel|dentist|school|kindergarten"](' + bbox + ');'
@@ -102,10 +76,8 @@ async def analyze(req: AnalyzeRequest):
     elements = query_overpass(req.bbox)
     if not elements:
         return {"error": "Организации не найдены"}
-
     scores = calculate_scores(elements, req.bbox)
     cats = categorize(elements)
-
     orgs = []
     lines = []
     for el in elements:
@@ -118,7 +90,6 @@ async def analyze(req: AnalyzeRequest):
         orgs.append({"name": name, "amenity": amenity, "cuisine": cuisine, "lat": el["lat"], "lon": el["lon"]})
         extra = " (" + cuisine + ")" if cuisine else ""
         lines.append("- " + name + ": " + amenity + extra)
-
     return {
         "organizations": orgs,
         "scores": scores,
