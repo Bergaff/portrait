@@ -8,38 +8,57 @@ class AnalyzeRequest(BaseModel):
     bbox: str
 
 def query_overpass(bbox):
-    q = "[out:json][timeout:25];("
+    q = "[out:json][timeout:30];("
     q += 'node["amenity"~"cafe|restaurant|bar|pharmacy|bank|clinic|gym|beauty|fast_food|pub|hotel|dentist|school|kindergarten"](' + bbox + ');'
     q += 'node["shop"](' + bbox + ');'
     q += 'node["leisure"~"fitness_centre|sports_centre|playground"](' + bbox + ');'
     q += 'node["tourism"](' + bbox + ');'
     q += 'node["office"](' + bbox + ');'
     q += ");out body;"
-    for server in ["https://overpass-api.de/api/interpreter", "https://overpass.kumi.systems/api/interpreter"]:
+
+    servers = [
+        "https://overpass-api.de/api/interpreter",
+        "https://overpass.kumi.systems/api/interpreter",
+        "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
+        "https://overpass.openstreetmap.ru/api/interpreter",
+    ]
+
+    for server in servers:
         try:
-            r = requests.get(server, params={"data": q}, timeout=25)
+            print("Trying server: " + server)
+            r = requests.get(
+                server,
+                params={"data": q},
+                timeout=35,
+                headers={"User-Agent": "QuarterPortrait/1.0"}
+            )
             if r.status_code == 200:
-                return r.json().get("elements", [])
-        except:
+                data = r.json()
+                elements = data.get("elements", [])
+                if elements:
+                    print("Got " + str(len(elements)) + " elements from " + server)
+                    return elements
+        except Exception as e:
+            print("Server error " + server + ": " + str(e)[:50])
             continue
     return []
 
 def categorize(elements):
     cat_map = {
-        "Еда и напитки": ["cafe","restaurant","fast_food","bar","pub"],
-        "Шопинг": ["clothes","shoes","jewelry","cosmetics","convenience","supermarket","watches","books"],
-        "Здоровье": ["pharmacy","clinic","dentist","doctors"],
-        "Красота": ["beauty","hairdresser"],
-        "Финансы": ["bank","atm"],
-        "Спорт": ["gym","fitness_centre","sports_centre"],
-        "Образование": ["school","kindergarten","university"],
-        "Гостиницы": ["hotel","hostel"],
-        "Досуг": ["cinema","theatre","museum","playground","nightclub"],
+        "Еда и напитки": ["cafe","restaurant","fast_food","bar","pub","food_court","biergarten"],
+        "Шопинг": ["clothes","shoes","jewelry","cosmetics","convenience","supermarket","watches","books","gift","sports","electronics","mobile_phone","florist"],
+        "Здоровье": ["pharmacy","clinic","dentist","doctors","hospital","veterinary"],
+        "Красота": ["beauty","hairdresser","massage","nail_salon"],
+        "Финансы": ["bank","atm","bureau_de_change"],
+        "Спорт": ["gym","fitness_centre","sports_centre","swimming_pool","yoga"],
+        "Образование": ["school","kindergarten","university","college","language_school","library"],
+        "Гостиницы": ["hotel","hostel","guest_house","motel"],
+        "Досуг": ["cinema","theatre","museum","playground","nightclub","arts_centre","escape_game"],
     }
     result = {}
     for el in elements:
         tags = el.get("tags", {})
-        amenity = tags.get("amenity", tags.get("shop", tags.get("leisure", "")))
+        amenity = tags.get("amenity", tags.get("shop", tags.get("leisure", tags.get("tourism", ""))))
         found = False
         for cat_name, keywords in cat_map.items():
             if amenity in keywords:
@@ -48,7 +67,7 @@ def categorize(elements):
                 break
         if not found:
             result["Прочее"] = result.get("Прочее", 0) + 1
-    return result
+    return {k: v for k, v in result.items() if v > 0}
 
 def calculate_scores(elements, bbox):
     parts = [float(x) for x in bbox.split(",")]
@@ -73,9 +92,10 @@ def calculate_scores(elements, bbox):
 
 @router.post("/analyze")
 async def analyze(req: AnalyzeRequest):
+    print("Analyze request for bbox: " + req.bbox)
     elements = query_overpass(req.bbox)
     if not elements:
-        return {"error": "Организации не найдены"}
+        return {"error": "Организации не найдены. Попробуйте выделить область побольше или повторите попытку."}
     scores = calculate_scores(elements, req.bbox)
     cats = categorize(elements)
     orgs = []
