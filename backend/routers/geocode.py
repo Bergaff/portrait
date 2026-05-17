@@ -8,8 +8,15 @@ async def search_address(q: str):
     try:
         r = requests.get(
             "https://nominatim.openstreetmap.org/search",
-            params={"q": q, "format": "json", "limit": 5, "accept-language": "ru"},
-            headers={"User-Agent": "QuarterPortrait/1.0"},
+            params={
+                "q": q,
+                "format": "json",
+                "limit": 5,
+                "accept-language": "ru",
+                "countrycodes": "ru,by,kz,uz,kg",
+                "addressdetails": 1
+            },
+            headers={"User-Agent": "QuarterPortrait/1.0 (contact@example.com)"},
             timeout=10
         )
         if r.status_code == 200:
@@ -21,8 +28,8 @@ async def search_address(q: str):
                     "lon": float(item.get("lon", 0))
                 })
             return {"results": results}
-    except:
-        pass
+    except Exception as e:
+        print("Geocode error: " + str(e))
     return {"results": []}
 
 @router.get("/detect-city")
