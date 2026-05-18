@@ -212,6 +212,27 @@ body {
 .sub-free { background: rgba(255,255,255,0.1); color: #aaa; }
 .sub-pro { background: linear-gradient(135deg, #feca57, #ff6b6b); color: #000; }
 
+/* ========== PROFILE ICON ========== */
+#profile-trigger {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #aaa;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+#profile-trigger:hover {
+    background: rgba(102,126,234,0.2);
+    color: #fff;
+    border-color: #667eea;
+}
+
+
 #report-charts {
     display: flex;
     gap: 20px;
