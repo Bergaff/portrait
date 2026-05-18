@@ -20,7 +20,7 @@
     <div id="map"></div>
     <div id="chat-panel">
         <div class="chat-header">
-            <div class="chat-logo">🏘️ AI-урбанист</div>
+            <div class="chat-logo">&#127968; AI-урбанист</div>
             <div id="user-info" style="display:none;">
                 <span id="user-email-short" style="font-size:12px;color:#aaa;"></span>
                 <button class="btn-auth" onclick="signOut()">Выйти</button>
@@ -35,23 +35,23 @@
         <div id="scores-panel" style="display:none;"></div>
         <button id="report-btn" class="btn-secondary" style="display:none;" onclick="generateReport()">Полный отчёт</button>
         <div id="quick-questions" style="display:none;">
-            <button class="btn-quick" onclick="askQuick(\'Какой бизнес открыть?\')">Бизнес?</button>
-            <button class="btn-quick" onclick="askQuick(\'Безопасно ли тут?\')">Безопасно?</button>
-            <button class="btn-quick" onclick="askQuick(\'Подходит для семьи?\')">Для семьи?</button>
-            <button class="btn-quick" onclick="askQuick(\'Чего не хватает?\')">Чего нет?</button>
+            <button class="btn-quick" onclick="askQuick(this.dataset.q)" data-q="Какой бизнес открыть?">Бизнес?</button>
+            <button class="btn-quick" onclick="askQuick(this.dataset.q)" data-q="Безопасно ли тут?">Безопасно?</button>
+            <button class="btn-quick" onclick="askQuick(this.dataset.q)" data-q="Подходит для семьи?">Для семьи?</button>
+            <button class="btn-quick" onclick="askQuick(this.dataset.q)" data-q="Чего не хватает в районе?">Чего нет?</button>
         </div>
         <div id="chat-messages"></div>
         <div class="chat-input-box">
             <input type="text" id="chat-input" placeholder="Спросите про район...">
-            <button id="send-btn" onclick="sendMessage()">→</button>
+            <button id="send-btn" onclick="sendMessage()">&#8594;</button>
         </div>
     </div>
 
     <div id="report-modal" style="display:none;">
         <div class="report-content" id="report-export-area">
             <div class="report-header">
-                <button class="report-close" onclick="closeReport()">✕</button>
-                <button class="btn-pdf" onclick="exportPDF()">📄 PDF</button>
+                <button class="report-close" onclick="closeReport()">&#10005;</button>
+                <button class="btn-pdf" id="pdf-btn" onclick="exportPDF()">&#128196; PDF</button>
             </div>
             <div id="report-charts">
                 <div class="chart-box"><canvas id="pieChart"></canvas></div>
@@ -60,17 +60,17 @@
             <div class="chart-box-full"><canvas id="barChart"></canvas></div>
             <div id="report-future-charts">
                 <div class="future-chart">
-                    <div class="future-icon">📊</div>
+                    <div class="future-icon">&#128202;</div>
                     <div class="future-label">Scatter Plot: рейтинг vs популярность</div>
                     <div class="future-note">После подключения отзывов</div>
                 </div>
                 <div class="future-chart">
-                    <div class="future-icon">☁️</div>
+                    <div class="future-icon">&#9729;&#65039;</div>
                     <div class="future-label">Облако слов из отзывов</div>
                     <div class="future-note">После подключения отзывов</div>
                 </div>
                 <div class="future-chart">
-                    <div class="future-icon">📈</div>
+                    <div class="future-icon">&#128200;</div>
                     <div class="future-label">Тренд качества за год</div>
                     <div class="future-note">После подключения отзывов</div>
                 </div>
@@ -81,21 +81,25 @@
 
     <div id="auth-modal" style="display:none;">
         <div class="auth-content">
-            <button class="report-close" onclick="toggleAuth()">✕</button>
-            <div id="auth-form-login">
-                <h2>Вход в аккаунт</h2>
-                <p class="auth-subtitle">Сохраняйте отчёты и историю</p>
-                <button class="btn-social btn-google" onclick="socialLogin(\'google\')">
-                    🔵 Войти через Google
-                </button>
-                <div class="auth-divider"><span>или по email</span></div>
-                <input type="email" id="auth-email" placeholder="Email" class="auth-input">
-                <input type="password" id="auth-password" placeholder="Пароль (мин. 6 символов)" class="auth-input">
-                <div id="auth-error" style="color:#f44336;font-size:12px;margin:4px 0;"></div>
-                <button class="btn-primary" onclick="emailSignIn()" style="margin:8px 0;width:100%">Войти</button>
-                <button class="btn-secondary" onclick="emailSignUp()" style="width:calc(100% - 32px)">Зарегистрироваться</button>
-                <button class="btn-link" onclick="resetPassword()">Забыли пароль?</button>
-            </div>
+            <button class="report-close" onclick="toggleAuth()">&#10005;</button>
+            <h2>Вход в аккаунт</h2>
+            <p class="auth-subtitle">Сохраняйте отчёты и историю</p>
+            <button class="btn-social btn-google" onclick="socialLogin('google')">
+                &#128309; Войти через Google
+            </button>
+            <button class="btn-social btn-discord" onclick="socialLogin('discord')">
+                &#127918; Войти через Discord
+            </button>
+            <button class="btn-social btn-facebook" onclick="socialLogin('facebook')">
+                &#128172; Войти через Facebook
+            </button>
+            <div class="auth-divider"><span>или по email</span></div>
+            <input type="email" id="auth-email" placeholder="Email" class="auth-input">
+            <input type="password" id="auth-password" placeholder="Пароль (мин. 6 символов)" class="auth-input">
+            <div id="auth-error" style="color:#f44336;font-size:12px;margin:4px 0;min-height:18px;"></div>
+            <button class="btn-primary" onclick="emailSignIn()" style="margin:8px 0;width:100%">Войти</button>
+            <button class="btn-secondary" onclick="emailSignUp()" style="width:calc(100% - 32px)">Зарегистрироваться</button>
+            <button class="btn-link" onclick="resetPassword()">Забыли пароль?</button>
         </div>
     </div>
 </div>
