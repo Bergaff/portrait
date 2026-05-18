@@ -9,9 +9,9 @@ class AnalyzeRequest(BaseModel):
 
 def query_overpass(bbox):
     q = "[out:json][timeout:30];("
-    q += 'node["amenity"~"cafe|restaurant|bar|pharmacy|bank|clinic|gym|beauty|fast_food|pub|hotel|dentist|school|kindergarten"](' + bbox + ');'
+    q += 'node["amenity"](' + bbox + ');'
     q += 'node["shop"](' + bbox + ');'
-    q += 'node["leisure"~"fitness_centre|sports_centre|playground"](' + bbox + ');'
+    q += 'node["leisure"](' + bbox + ');'
     q += 'node["tourism"](' + bbox + ');'
     q += 'node["office"](' + bbox + ');'
     q += ");out body;"
@@ -25,49 +25,45 @@ def query_overpass(bbox):
 
     for server in servers:
         try:
-            print("Trying server: " + server)
-            r = requests.get(
-                server,
-                params={"data": q},
-                timeout=35,
-                headers={"User-Agent": "QuarterPortrait/1.0"}
-            )
+            r = requests.get(server, params={"data": q}, timeout=35, headers={"User-Agent": "QuarterPortrait/1.0"})
             if r.status_code == 200:
-                data = r.json()
-                elements = data.get("elements", [])
+                elements = r.json().get("elements", [])
                 if elements:
-                    print("Got " + str(len(elements)) + " elements from " + server)
                     return elements
-        except Exception as e:
-            print("Server error " + server + ": " + str(e)[:50])
+        except:
             continue
     return []
 
 def categorize(elements):
     cat_map = {
-        "Еда и напитки": ["cafe","restaurant","fast_food","bar","pub","food_court","biergarten"],
-        "Шопинг": ["clothes","shoes","jewelry","cosmetics","convenience","supermarket","watches","books","gift","sports","electronics","mobile_phone","florist"],
-        "Здоровье": ["pharmacy","clinic","dentist","doctors","hospital","veterinary"],
-        "Красота": ["beauty","hairdresser","massage","nail_salon"],
-        "Финансы": ["bank","atm","bureau_de_change"],
-        "Спорт": ["gym","fitness_centre","sports_centre","swimming_pool","yoga"],
-        "Образование": ["school","kindergarten","university","college","language_school","library"],
-        "Гостиницы": ["hotel","hostel","guest_house","motel"],
-        "Досуг": ["cinema","theatre","museum","playground","nightclub","arts_centre","escape_game"],
+        "Еда и напитки": ["cafe","restaurant","fast_food","bar","pub","food_court","biergarten","ice_cream"],
+        "Шопинг": ["clothes","shoes","jewelry","cosmetics","convenience","supermarket","watches","books","gift","sports","electronics","mobile_phone","florist","kiosk","mall","department_store","variety_store","bag","boutique","fabric","leather","outdoor","second_hand","charity","newsagent","stationery","houseware","hardware","doityourself","garden_centre","trade","wholesale"],
+        "Здоровье": ["pharmacy","clinic","dentist","doctors","hospital","veterinary","optician","hearing_aids","medical_supply"],
+        "Красота": ["beauty","hairdresser","massage","nail_salon","tattoo","cosmetics"],
+        "Финансы": ["bank","atm","bureau_de_change","money_lender","insurance"],
+        "Спорт": ["gym","fitness_centre","sports_centre","swimming_pool","yoga","dance","martial_arts","sports","stadium"],
+        "Образование": ["school","kindergarten","university","college","language_school","library","music_school","driving_school","training"],
+        "Гостиницы": ["hotel","hostel","guest_house","motel","apartment"],
+        "Досуг": ["cinema","theatre","museum","playground","nightclub","arts_centre","escape_game","amusement_arcade","bowling_alley","water_park","theme_park","zoo","park","garden"],
+        "Автомобили": ["car_repair","car_wash","fuel","car","car_parts","motorcycle","tyres","parking"],
+        "Бытовые услуги": ["laundry","dry_cleaning","tailor","locksmith","shoe_repair","copyshop","photo","funeral_directors","storage_rental","post_office","townhall","community_centre","social_facility"],
+        "Общепит": ["drinking_water","bbq","marketplace","vending_machine"],
+        "IT и связь": ["internet_cafe","telephone","coworking_space","computer","mobile_phone"],
+        "Религия": ["place_of_worship","monastery"],
     }
     result = {}
     for el in elements:
         tags = el.get("tags", {})
-        amenity = tags.get("amenity", tags.get("shop", tags.get("leisure", tags.get("tourism", ""))))
+        amenity = tags.get("amenity", tags.get("shop", tags.get("leisure", tags.get("tourism", tags.get("office", "")))))
         found = False
         for cat_name, keywords in cat_map.items():
             if amenity in keywords:
                 result[cat_name] = result.get(cat_name, 0) + 1
                 found = True
                 break
-        if not found:
+        if not found and amenity:
             result["Прочее"] = result.get("Прочее", 0) + 1
-    return {k: v for k, v in result.items() if v > 0}
+    return {k: v for k, v in sorted(result.items(), key=lambda x: -x[1]) if v > 0}
 
 def calculate_scores(elements, bbox):
     parts = [float(x) for x in bbox.split(",")]
@@ -92,10 +88,9 @@ def calculate_scores(elements, bbox):
 
 @router.post("/analyze")
 async def analyze(req: AnalyzeRequest):
-    print("Analyze request for bbox: " + req.bbox)
     elements = query_overpass(req.bbox)
     if not elements:
-        return {"error": "Организации не найдены. Попробуйте выделить область побольше или повторите попытку."}
+        return {"error": "Организации не найдены. Попробуйте выделить область побольше."}
     scores = calculate_scores(elements, req.bbox)
     cats = categorize(elements)
     orgs = []
