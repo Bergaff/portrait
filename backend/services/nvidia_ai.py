@@ -10,7 +10,7 @@ def ask_nvidia(prompt):
         r = nvidia_client.chat.completions.create(
             model="meta/llama-3.3-70b-instruct",
             messages=[{"role": "user", "content": prompt}],
-            max_tokens=2500,
+            max_tokens=2000,
             temperature=0.7
         )
         return r.choices[0].message.content.strip()
