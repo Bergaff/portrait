@@ -47,6 +47,35 @@
         </div>
     </div>
 
+    <!-- СТАРТОВЫЙ ЭКРАН ВЫБОРА ГОРОДА -->
+    <div id="city-modal">
+        <div class="city-modal-bg"></div>
+        <div class="city-modal-box">
+            <div class="city-modal-icon">&#127968;</div>
+            <h2 class="city-modal-title">Портрет квартала</h2>
+            <p class="city-modal-sub">AI-анализ городской инфраструктуры</p>
+            <div id="city-detecting" style="color:#aaa;font-size:13px;margin:12px 0;">
+                Определяем ваш город...
+            </div>
+            <div id="city-confirm" style="display:none;">
+                <p style="color:#ccc;font-size:14px;margin-bottom:12px;">
+                    Ваш город: <b id="city-name-show" style="color:#667eea;"></b>?
+                </p>
+                <div style="display:flex;gap:8px;justify-content:center;margin-bottom:16px;">
+                    <button class="btn-primary" style="margin:0;padding:10px 24px;font-size:14px;" onclick="confirmCity()">Да, верно</button>
+                    <button class="btn-secondary" style="margin:0;padding:10px 24px;font-size:14px;" onclick="showCityInput()">Другой город</button>
+                </div>
+            </div>
+            <div id="city-input-block" style="display:none;">
+                <input type="text" id="city-input" class="auth-input" placeholder="Введите город..." style="margin-bottom:8px;">
+                <div id="city-search-results" style="background:#2a2a4a;border-radius:10px;max-height:150px;overflow-y:auto;margin-bottom:8px;"></div>
+                <button class="btn-primary" style="margin:0;width:100%;padding:10px;" onclick="searchAndGoCity()">Перейти</button>
+            </div>
+            <button class="btn-link" onclick="skipCity()" style="margin-top:8px;font-size:12px;color:#555;">Пропустить — начать с Москвы</button>
+        </div>
+    </div>
+
+    <!-- ОТЧЁТ -->
     <div id="report-modal" style="display:none;">
         <div class="report-content" id="report-export-area">
             <div class="report-header">
@@ -79,6 +108,7 @@
         </div>
     </div>
 
+    <!-- АВТОРИЗАЦИЯ -->
     <div id="auth-modal" style="display:none;">
         <div class="auth-content">
             <button class="report-close" onclick="toggleAuth()">&#10005;</button>
@@ -86,12 +116,6 @@
             <p class="auth-subtitle">Сохраняйте отчёты и историю</p>
             <button class="btn-social btn-google" onclick="socialLogin('google')">
                 &#128309; Войти через Google
-            </button>
-            <button class="btn-social btn-discord" onclick="socialLogin('discord')">
-                &#127918; Войти через Discord
-            </button>
-            <button class="btn-social btn-facebook" onclick="socialLogin('facebook')">
-                &#128172; Войти через Facebook
             </button>
             <div class="auth-divider"><span>или по email</span></div>
             <input type="email" id="auth-email" placeholder="Email" class="auth-input">
