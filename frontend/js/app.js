@@ -1,9 +1,98 @@
+// ========== SUPABASE AUTH ==========
+const { createClient } = supabase;
+const supabaseClient = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+let currentUser = null;
+
+supabaseClient.auth.getSession().then(({ data: { session } }) => {
+    if (session) { currentUser = session.user; updateAuthUI(session.user); }
+});
+
+supabaseClient.auth.onAuthStateChange((event, session) => {
+    if (session) {
+        currentUser = session.user;
+        updateAuthUI(session.user);
+        document.getElementById("auth-modal").style.display = "none";
+    } else {
+        currentUser = null;
+        updateAuthUILoggedOut();
+    }
+});
+
+function updateAuthUI(user) {
+    document.getElementById("auth-btn").style.display = "none";
+    document.getElementById("user-info").style.display = "flex";
+    const email = user.email || "";
+    document.getElementById("user-email-short").textContent =
+        email.substring(0, 15) + (email.length > 15 ? "..." : "");
+}
+
+function updateAuthUILoggedOut() {
+    document.getElementById("auth-btn").style.display = "block";
+    document.getElementById("user-info").style.display = "none";
+}
+
+async function socialLogin(provider) {
+    const { error } = await supabaseClient.auth.signInWithOAuth({
+        provider: provider,
+        options: { redirectTo: window.location.origin }
+    });
+    if (error) showAuthError(error.message);
+}
+
+async function emailSignIn() {
+    const email = document.getElementById("auth-email").value.trim();
+    const password = document.getElementById("auth-password").value;
+    if (!email || !password) { showAuthError("Заполните email и пароль"); return; }
+    const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
+    if (error) showAuthError(error.message);
+}
+
+async function emailSignUp() {
+    const email = document.getElementById("auth-email").value.trim();
+    const password = document.getElementById("auth-password").value;
+    if (!email || !password) { showAuthError("Заполните email и пароль"); return; }
+    if (password.length < 6) { showAuthError("Пароль минимум 6 символов"); return; }
+    const { error } = await supabaseClient.auth.signUp({ email, password });
+    if (error) showAuthError(error.message);
+    else showAuthError("✅ Проверьте почту для подтверждения!");
+}
+
+async function resetPassword() {
+    const email = document.getElementById("auth-email").value.trim();
+    if (!email) { showAuthError("Введите email"); return; }
+    const { error } = await supabaseClient.auth.resetPasswordForEmail(email);
+    if (error) showAuthError(error.message);
+    else showAuthError("✅ Письмо отправлено на " + email);
+}
+
+async function signOut() { await supabaseClient.auth.signOut(); }
+
+function showAuthError(msg) { document.getElementById("auth-error").textContent = msg; }
+
+function toggleAuth() {
+    const m = document.getElementById("auth-modal");
+    m.style.display = m.style.display === "none" ? "flex" : "none";
+    document.getElementById("auth-error").textContent = "";
+}
+
+// ========== СОСТОЯНИЕ ==========
 let state = {
-    bbox: null, organizations: [], scores: {}, categories: {},
-    orgText: "", chatHistory: [], heatLayer: null, markersLayer: null,
-    pieChart: null, barChart: null, radarChart: null
+    bbox: null,
+    organizations: [],
+    scores: {},
+    categories: {},
+    orgText: "",
+    chatHistory: [],
+    heatLayer: null,
+    markersLayer: null,
+    pieChart: null,
+    barChart: null,
+    radarChart: null,
+    activeFilter: null
 };
 
+// ========== КАРТА ==========
 const map = L.map("map").setView([55.7558, 37.6173], 13);
 L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
     attribution: "OpenStreetMap, CARTO", maxZoom: 19
@@ -29,6 +118,7 @@ map.on("draw:created", function(e) {
     document.getElementById("analyze-btn").style.display = "block";
 });
 
+// ========== ОПРЕДЕЛЕНИЕ ГОРОДА ==========
 async function detectCity() {
     try {
         const r = await fetch("/api/detect-city");
@@ -41,20 +131,20 @@ async function detectCity() {
 }
 detectCity();
 
-// ПОИСК
+// ========== ПОИСК ==========
 let searchTimeout;
 document.getElementById("search-input").addEventListener("input", function(e) {
     clearTimeout(searchTimeout);
     const q = e.target.value.trim();
-    if (q.length < 3) { document.getElementById("search-results").innerHTML = ""; return; }
+    if (q.length < 2) { document.getElementById("search-results").innerHTML = ""; return; }
     searchTimeout = setTimeout(async () => {
         try {
             const r = await fetch("/api/search?q=" + encodeURIComponent(q));
             const data = await r.json();
             const c = document.getElementById("search-results");
             c.innerHTML = "";
-            if (data.results.length === 0) {
-                c.innerHTML = '<div class="search-item" style="color:#666">Ничего не найдено</div>';
+            if (!data.results || data.results.length === 0) {
+                c.innerHTML = '<div class="search-item" style="color:#666;cursor:default">Ничего не найдено</div>';
                 return;
             }
             data.results.forEach(item => {
@@ -64,15 +154,15 @@ document.getElementById("search-input").addEventListener("input", function(e) {
                 div.onclick = () => {
                     map.setView([item.lat, item.lon], 16);
                     c.innerHTML = "";
-                    document.getElementById("search-input").value = "";
+                    document.getElementById("search-input").value = item.display_name.substring(0, 50);
                 };
                 c.appendChild(div);
             });
-        } catch(err) { console.error(err); }
-    }, 500);
+        } catch(err) { console.error("Search error:", err); }
+    }, 400);
 });
 
-// АНАЛИЗ
+// ========== АНАЛИЗ ==========
 async function analyzeArea() {
     if (!state.bbox) return;
     const btn = document.getElementById("analyze-btn");
@@ -83,57 +173,125 @@ async function analyzeArea() {
             body: JSON.stringify({bbox: state.bbox})
         });
         const data = await r.json();
-        if (data.error) { addBotMessage(data.error); return; }
+        if (data.error) { addBotMessage("⚠️ " + data.error); return; }
+
         state.organizations = data.organizations;
         state.scores = data.scores;
         state.categories = data.categories;
         state.orgText = data.org_text;
+        state.activeFilter = null;
 
         if (state.heatLayer) map.removeLayer(state.heatLayer);
-        state.heatLayer = L.heatLayer(
-            data.organizations.map(o=>[o.lat,o.lon,1]),
-            {radius:20,blur:15,gradient:{0.2:"#667eea",0.5:"#764ba2",0.7:"#f093fb",1:"#f5576c"}}
-        ).addTo(map);
+        if (data.organizations.length > 0) {
+            state.heatLayer = L.heatLayer(
+                data.organizations.map(o => [o.lat, o.lon, 1]),
+                {radius:20,blur:15,gradient:{0.2:"#667eea",0.5:"#764ba2",0.7:"#f093fb",1:"#f5576c"}}
+            ).addTo(map);
+        }
 
-        if (state.markersLayer) map.removeLayer(state.markersLayer);
-        state.markersLayer = L.layerGroup();
-        data.organizations.forEach(o => {
-            if (o.name && o.name !== "Без названия") {
-                L.circleMarker([o.lat,o.lon],{radius:4,color:"#667eea",fillOpacity:0.8})
-                 .bindTooltip(o.name).addTo(state.markersLayer);
-            }
-        });
-        state.markersLayer.addTo(map);
-
+        renderFilteredMarkers();
         showScores(data.scores);
+
         const s = data.scores;
-        addBotMessage("Район проанализирован!\n\nИндекс: "+s.overall+"/100\nНайдено "+s.total_places+" организаций на "+s.area_km2+" км²\n\nНажмите «Полный отчёт» или задайте вопрос.");
+        addBotMessage("✅ Район проанализирован!\n\nИндекс: "+s.overall+"/100\nНайдено "+s.total_places+" организаций на "+s.area_km2+" км²\n\nКликайте по категориям для фильтрации на карте.");
         document.getElementById("report-btn").style.display = "block";
         document.getElementById("quick-questions").style.display = "flex";
-    } catch(e) { addBotMessage("Ошибка: "+e.message); }
+    } catch(e) { addBotMessage("❌ Ошибка: " + e.message); }
     finally { btn.disabled = false; btn.textContent = "Анализировать район"; }
 }
 
+// ========== ФИЛЬТР ПО КАТЕГОРИЯМ ==========
+const CAT_MAP = {
+    "Еда": ["cafe","restaurant","fast_food","bar","pub","food_court","biergarten"],
+    "Здоровье": ["pharmacy","clinic","dentist","doctors","hospital","veterinary"],
+    "Шопинг": ["clothes","shoes","supermarket","convenience","electronics","mobile_phone","books","gift","florist","jewelry","cosmetics"],
+    "Спорт": ["gym","fitness_centre","sports_centre","swimming_pool","yoga"],
+    "Образование": ["school","kindergarten","university","college","language_school","library"],
+    "Досуг": ["cinema","theatre","museum","playground","nightclub","arts_centre","escape_game"],
+    "Разнообразие": []
+};
+
+function toggleFilter(category) {
+    if (state.activeFilter === category) {
+        state.activeFilter = null;
+    } else {
+        state.activeFilter = category;
+    }
+    renderFilteredMarkers();
+    showScores(state.scores);
+}
+
+function renderFilteredMarkers() {
+    if (state.markersLayer) map.removeLayer(state.markersLayer);
+    state.markersLayer = L.layerGroup();
+
+    const catColors = {
+        "Еда": "#feca57",
+        "Здоровье": "#ff6b6b",
+        "Шопинг": "#48dbfb",
+        "Спорт": "#1dd1a1",
+        "Образование": "#54a0ff",
+        "Досуг": "#f093fb",
+        "Разнообразие": "#667eea"
+    };
+
+    state.organizations.forEach(o => {
+        if (state.activeFilter && state.activeFilter !== "Разнообразие") {
+            const allowed = CAT_MAP[state.activeFilter] || [];
+            if (!allowed.includes(o.amenity)) return;
+        }
+
+        const color = state.activeFilter
+            ? (catColors[state.activeFilter] || "#667eea")
+            : "#667eea";
+
+        L.circleMarker([o.lat, o.lon], {
+            radius: 5,
+            color: color,
+            fillColor: color,
+            fillOpacity: 0.85,
+            weight: 1
+        }).bindTooltip(o.name + " (" + o.amenity + ")").addTo(state.markersLayer);
+    });
+
+    state.markersLayer.addTo(map);
+}
+
+// ========== ПОКАЗ МЕТРИК ==========
 function showScores(s) {
     const panel = document.getElementById("scores-panel");
     panel.style.display = "block";
     const metrics = [
-        {label:"Еда",value:s.food},{label:"Здоровье",value:s.health},
-        {label:"Шопинг",value:s.shopping},{label:"Спорт",value:s.sport},
-        {label:"Образование",value:s.education},{label:"Досуг",value:s.entertainment},
-        {label:"Разнообразие",value:s.diversity}
+        {label:"Еда", value:s.food},
+        {label:"Здоровье", value:s.health},
+        {label:"Шопинг", value:s.shopping},
+        {label:"Спорт", value:s.sport},
+        {label:"Образование", value:s.education},
+        {label:"Досуг", value:s.entertainment},
+        {label:"Разнообразие", value:s.diversity}
     ];
     let html = '<div class="score-badge"><div class="score-big">'+s.overall+'/100</div><div class="score-sub">ИНДЕКС РАЙОНА</div></div>';
+
+    if (state.activeFilter) {
+        html += '<div style="text-align:center;font-size:11px;color:#667eea;margin-bottom:6px;">Фильтр: ' + state.activeFilter + ' — нажмите снова для сброса</div>';
+    }
+
     metrics.forEach(m => {
         const color = m.value>=60?"#4CAF50":m.value>=30?"#FFC107":"#f44336";
-        html += '<div class="metric"><span class="metric-label">'+m.label+'</span>';
+        const isActive = state.activeFilter === m.label;
+        const activeBg = isActive ? "background:rgba(102,126,234,0.2);border-radius:8px;border:1px solid #667eea;" : "";
+
+        html += '<div class="metric" style="cursor:pointer;padding:6px 4px;'+activeBg+'" onclick="toggleFilter(\''+m.label+'\')">';
+        html += '<span class="metric-label" style="'+(isActive?"color:#fff;font-weight:600;":"")+'">'+m.label+'</span>';
         html += '<div class="metric-bar-bg"><div class="metric-bar-fill" style="width:'+m.value+'%;background:'+color+'"></div></div>';
-        html += '<span class="metric-value">'+m.value+'</span></div>';
+        html += '<span class="metric-value">'+m.value+'</span>';
+        if (isActive) html += '<span style="color:#667eea;font-size:10px;margin-left:4px;">✓</span>';
+        html += '</div>';
     });
     panel.innerHTML = html;
 }
 
-// ОТЧЁТ
+// ========== ОТЧЁТ ==========
 async function generateReport() {
     const btn = document.getElementById("report-btn");
     btn.disabled = true; btn.textContent = "Генерируем...";
@@ -146,7 +304,7 @@ async function generateReport() {
         document.getElementById("report-text").innerHTML = markdownToHtml(data.report);
         renderCharts();
         document.getElementById("report-modal").style.display = "flex";
-    } catch(e) { addBotMessage("Ошибка отчёта"); }
+    } catch(e) { addBotMessage("Ошибка генерации отчёта"); }
     finally { btn.disabled = false; btn.textContent = "Полный отчёт"; }
 }
 
@@ -156,7 +314,6 @@ function renderCharts() {
     const catValues = Object.values(cats);
     const colors = ["#667eea","#764ba2","#f093fb","#f5576c","#feca57","#48dbfb","#ff9ff3","#54a0ff","#5f27cd","#01a3a4"];
 
-    // ПАЙЧАРТ
     if (state.pieChart) state.pieChart.destroy();
     state.pieChart = new Chart(document.getElementById("pieChart").getContext("2d"), {
         type: "doughnut",
@@ -164,17 +321,16 @@ function renderCharts() {
         options: {
             responsive: true, maintainAspectRatio: false,
             plugins: {
-                legend: { position:"right", labels: { color:"#ccc", font:{size:11}, padding:8 } },
+                legend: { position:"right", labels:{color:"#ccc",font:{size:11},padding:8} },
                 title: { display:true, text:"Категории организаций", color:"#fff", font:{size:14} }
             }
         }
     });
 
-    // БАРЧАРТ
     const s = state.scores;
     const barLabels = ["Еда","Здоровье","Шопинг","Спорт","Образование","Досуг","Разнообразие"];
     const barValues = [s.food,s.health,s.shopping,s.sport,s.education,s.entertainment,s.diversity];
-    const barColors = ["#667eea","#4ECDC4","#f093fb","#feca57","#48dbfb","#ff9ff3","#54a0ff"];
+    const barColors = ["#feca57","#ff6b6b","#48dbfb","#1dd1a1","#54a0ff","#f093fb","#667eea"];
 
     if (state.barChart) state.barChart.destroy();
     state.barChart = new Chart(document.getElementById("barChart").getContext("2d"), {
@@ -190,7 +346,6 @@ function renderCharts() {
         }
     });
 
-    // РАДАР (ЛЕПЕСТКОВАЯ)
     if (state.radarChart) state.radarChart.destroy();
     state.radarChart = new Chart(document.getElementById("radarChart").getContext("2d"), {
         type: "radar",
@@ -205,7 +360,7 @@ function renderCharts() {
                 pointBackgroundColor: "#667eea",
                 pointRadius: 4
             },{
-                label: "Средний по городу",
+                label: "Среднее",
                 data: [50,50,50,50,50,50,50],
                 backgroundColor: "rgba(255,255,255,0.05)",
                 borderColor: "rgba(255,255,255,0.3)",
@@ -218,16 +373,16 @@ function renderCharts() {
             responsive: true, maintainAspectRatio: false,
             scales: {
                 r: {
-                    min: 0, max: 100,
-                    ticks: { color: "#666", backdropColor: "transparent", stepSize: 25 },
-                    grid: { color: "rgba(255,255,255,0.08)" },
-                    pointLabels: { color: "#ccc", font: { size: 12 } },
-                    angleLines: { color: "rgba(255,255,255,0.08)" }
+                    min:0, max:100,
+                    ticks:{color:"#666",backdropColor:"transparent",stepSize:25},
+                    grid:{color:"rgba(255,255,255,0.08)"},
+                    pointLabels:{color:"#ccc",font:{size:12}},
+                    angleLines:{color:"rgba(255,255,255,0.08)"}
                 }
             },
             plugins: {
-                legend: { position: "bottom", labels: { color: "#ccc", font: { size: 11 } } },
-                title: { display: true, text: "Профиль района", color: "#fff", font: { size: 14 } }
+                legend:{position:"bottom",labels:{color:"#ccc",font:{size:11}}},
+                title:{display:true,text:"Профиль района",color:"#fff",font:{size:14}}
             }
         }
     });
@@ -235,17 +390,60 @@ function renderCharts() {
 
 function closeReport() { document.getElementById("report-modal").style.display = "none"; }
 
-function exportPDF() {
-    const el = document.getElementById("report-export-area");
-    html2pdf().set({
-        margin: 10, filename: "quarter-report.pdf",
-        image: { type: "jpeg", quality: 0.98 },
-        html2canvas: { scale: 2, backgroundColor: "#1e1e36" },
-        jsPDF: { unit: "mm", format: "a4", orientation: "portrait" }
-    }).from(el).save();
+// ========== PDF МНОГОСТРАНИЧНЫЙ ==========
+async function exportPDF() {
+    const btn = document.querySelector(".btn-pdf");
+    if (btn) { btn.disabled = true; btn.textContent = "Генерируем PDF..."; }
+
+    try {
+        const element = document.getElementById("report-export-area");
+        const canvas = await html2canvas(element, {
+            scale: 2,
+            backgroundColor: "#1e1e36",
+            useCORS: true,
+            logging: false
+        });
+
+        const imgData = canvas.toDataURL("image/jpeg", 0.95);
+        const pdf = new jspdf.jsPDF("p", "mm", "a4");
+
+        const pageWidth = 210;
+        const pageHeight = 297;
+        const margin = 0;
+
+        const imgWidth = pageWidth - margin * 2;
+        const imgHeight = canvas.height * imgWidth / canvas.width;
+
+        let heightLeft = imgHeight;
+        let position = margin;
+        let page = 0;
+
+        while (heightLeft > 0) {
+            if (page > 0) pdf.addPage();
+            pdf.addImage(imgData, "JPEG", margin, position - page * pageHeight, imgWidth, imgHeight);
+            heightLeft -= pageHeight;
+            position += pageHeight;
+            page++;
+        }
+
+        const date = new Date().toLocaleDateString("ru-RU");
+        pdf.setFontSize(8);
+        pdf.setTextColor(150);
+        for (let i = 1; i <= page; i++) {
+            pdf.setPage(i);
+            pdf.text("Портрет квартала • " + date + " • Стр. " + i + " из " + page, 105, 292, {align:"center"});
+        }
+
+        pdf.save("quarter-report-" + Date.now() + ".pdf");
+    } catch(e) {
+        console.error("PDF error:", e);
+        alert("Ошибка PDF: " + e.message);
+    } finally {
+        if (btn) { btn.disabled = false; btn.textContent = "📄 PDF"; }
+    }
 }
 
-// ЧАТ
+// ========== ЧАТ ==========
 function addBotMessage(text) {
     state.chatHistory.push({role:"assistant",content:text});
     const c = document.getElementById("chat-messages");
@@ -254,6 +452,7 @@ function addBotMessage(text) {
     div.innerHTML = markdownToHtml(text);
     c.appendChild(div); c.scrollTop = c.scrollHeight;
 }
+
 function addUserMessage(text) {
     state.chatHistory.push({role:"user",content:text});
     const c = document.getElementById("chat-messages");
@@ -262,14 +461,19 @@ function addUserMessage(text) {
     div.textContent = text;
     c.appendChild(div); c.scrollTop = c.scrollHeight;
 }
+
 function addLoading() {
     const c = document.getElementById("chat-messages");
     const div = document.createElement("div");
     div.className = "message msg-loading"; div.id = "loading-msg";
-    div.textContent = "Думаю...";
+    div.innerHTML = '<span>.</span><span>.</span><span>.</span>';
     c.appendChild(div); c.scrollTop = c.scrollHeight;
 }
-function removeLoading() { const el = document.getElementById("loading-msg"); if(el) el.remove(); }
+
+function removeLoading() {
+    const el = document.getElementById("loading-msg");
+    if (el) el.remove();
+}
 
 async function sendMessage() {
     const input = document.getElementById("chat-input");
@@ -299,16 +503,15 @@ async function askQuick(q) {
     } catch(e) { removeLoading(); addBotMessage("Ошибка"); }
 }
 
-document.getElementById("chat-input").addEventListener("keypress", function(e) { if(e.key==="Enter") sendMessage(); });
-document.addEventListener("click", function(e) { if(!e.target.closest(".search-box")) document.getElementById("search-results").innerHTML=""; });
+document.getElementById("chat-input").addEventListener("keypress", function(e) {
+    if (e.key === "Enter") sendMessage();
+});
 
-// AUTH заглушки
-function toggleAuth() {
-    const m = document.getElementById("auth-modal");
-    m.style.display = m.style.display === "none" ? "flex" : "none";
-}
-function socialLogin(provider) { alert("Авторизация через " + provider + " — подключите Supabase Auth"); }
-function emailLogin() { alert("Email авторизация — подключите Supabase Auth"); }
+document.addEventListener("click", function(e) {
+    if (!e.target.closest(".search-box")) {
+        document.getElementById("search-results").innerHTML = "";
+    }
+});
 
 function markdownToHtml(text) {
     if (!text) return "";
