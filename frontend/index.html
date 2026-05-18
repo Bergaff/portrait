@@ -22,7 +22,6 @@
         <div class="chat-header">
             <div class="chat-logo">&#127968; AI-урбанист</div>
             <div id="user-info" style="display:none; align-items:center; gap:10px;">
-                <!-- Кнопка профиля (иконка) -->
                 <div id="profile-trigger" onclick="openProfile()">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
                 </div>
@@ -50,23 +49,27 @@
         </div>
     </div>
 
-    <!-- МОДАЛКИ (ОСТАЮТСЯ ТЕ ЖЕ) -->
-    <div id="city-modal" style="display:none;">
+    <!-- CITY MODAL — показывается по умолчанию, JS решает скрывать ли -->
+    <div id="city-modal">
         <div class="city-modal-bg"></div>
         <div class="city-modal-box">
             <div class="city-modal-icon">&#127968;</div>
             <h2 class="city-modal-title">Портрет квартала</h2>
+            <p class="city-modal-sub">AI-анализ городской инфраструктуры</p>
             <div id="city-detecting">Определяем ваш город...</div>
             <div id="city-confirm" style="display:none;">
-                <p>Ваш город: <b id="city-name-show"></b>?</p>
-                <button class="btn-primary" onclick="confirmCity()">Да, верно</button>
-                <button class="btn-secondary" onclick="showCityInput()">Другой</button>
+                <p style="color:#ccc;font-size:14px;margin-bottom:12px;">Ваш город: <b id="city-name-show" style="color:#667eea;"></b>?</p>
+                <div style="display:flex;gap:8px;justify-content:center;margin-bottom:16px;">
+                    <button class="btn-primary" style="margin:0;padding:10px 24px;" onclick="confirmCity()">Да</button>
+                    <button class="btn-secondary" style="margin:0;padding:10px 24px;" onclick="showCityInput()">Другой</button>
+                </div>
             </div>
             <div id="city-input-block" style="display:none;">
                 <input type="text" id="city-input" class="auth-input" placeholder="Введите город...">
-                <button class="btn-primary" onclick="searchAndGoCity()">Перейти</button>
+                <div id="city-search-results" style="background:#2a2a4a;border-radius:10px;max-height:150px;overflow-y:auto;margin-bottom:8px;"></div>
+                <button class="btn-primary" style="margin:0;width:100%;padding:10px;" onclick="searchAndGoCity()">Перейти</button>
             </div>
-            <button class="btn-link" onclick="skipCity()">Пропустить</button>
+            <button class="btn-link" onclick="skipCity()" style="margin-top:12px;">Пропустить</button>
         </div>
     </div>
 
@@ -77,17 +80,15 @@
             <div id="profile-content"></div>
         </div>
     </div>
-
     <div id="confirm-modal" style="display:none;">
         <div class="auth-content" style="max-width:320px;">
             <h2>Выйти из аккаунта?</h2>
             <div style="display:flex;gap:12px;justify-content:center;margin-top:20px;">
-                <button class="btn-primary" onclick="doSignOut()">Да, выйти</button>
-                <button class="btn-secondary" onclick="closeConfirm()">Отмена</button>
+                <button class="btn-primary" style="margin:0;" onclick="doSignOut()">Да, выйти</button>
+                <button class="btn-secondary" style="margin:0;" onclick="closeConfirm()">Отмена</button>
             </div>
         </div>
     </div>
-
     <div id="report-modal" style="display:none;">
         <div class="report-content" id="report-export-area">
             <div class="report-header">
@@ -102,7 +103,6 @@
             <div id="report-text"></div>
         </div>
     </div>
-
     <div id="auth-modal" style="display:none;">
         <div class="auth-content">
             <button class="report-close" onclick="toggleAuth()">&#10005;</button>
@@ -111,7 +111,7 @@
             <div class="auth-divider"><span>или по email</span></div>
             <input type="email" id="auth-email" placeholder="Email" class="auth-input">
             <input type="password" id="auth-password" placeholder="Пароль" class="auth-input">
-            <div id="auth-error" style="color:red; font-size:12px;"></div>
+            <div id="auth-error" style="color:#f44336;font-size:12px;min-height:18px;"></div>
             <button class="btn-primary" onclick="emailSignIn()" style="width:100%">Войти</button>
             <button class="btn-secondary" onclick="emailSignUp()">Зарегистрироваться</button>
         </div>
