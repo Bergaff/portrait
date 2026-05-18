@@ -1,7 +1,6 @@
-// ========== SUPABASE AUTH ==========
+// ========== SUPABASE ==========
 const { createClient } = supabase;
 const supabaseClient = createClient(SUPABASE_URL, SUPABASE_KEY);
-
 let currentUser = null;
 
 supabaseClient.auth.getSession().then(({ data: { session } }) => {
@@ -22,9 +21,9 @@ supabaseClient.auth.onAuthStateChange((event, session) => {
 function updateAuthUI(user) {
     document.getElementById("auth-btn").style.display = "none";
     document.getElementById("user-info").style.display = "flex";
-    const email = user.email || "";
+    const email = user.email || user.user_metadata?.full_name || "Пользователь";
     document.getElementById("user-email-short").textContent =
-        email.substring(0, 15) + (email.length > 15 ? "..." : "");
+        email.substring(0, 16) + (email.length > 16 ? "..." : "");
 }
 
 function updateAuthUILoggedOut() {
@@ -33,6 +32,7 @@ function updateAuthUILoggedOut() {
 }
 
 async function socialLogin(provider) {
+    showAuthError("Открываем " + provider + "...");
     const { error } = await supabaseClient.auth.signInWithOAuth({
         provider: provider,
         options: { redirectTo: window.location.origin }
@@ -44,6 +44,7 @@ async function emailSignIn() {
     const email = document.getElementById("auth-email").value.trim();
     const password = document.getElementById("auth-password").value;
     if (!email || !password) { showAuthError("Заполните email и пароль"); return; }
+    showAuthError("Входим...");
     const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
     if (error) showAuthError(error.message);
 }
@@ -53,9 +54,10 @@ async function emailSignUp() {
     const password = document.getElementById("auth-password").value;
     if (!email || !password) { showAuthError("Заполните email и пароль"); return; }
     if (password.length < 6) { showAuthError("Пароль минимум 6 символов"); return; }
+    showAuthError("Регистрируем...");
     const { error } = await supabaseClient.auth.signUp({ email, password });
     if (error) showAuthError(error.message);
-    else showAuthError("✅ Проверьте почту для подтверждения!");
+    else showAuthError("✅ Проверьте почту!");
 }
 
 async function resetPassword() {
@@ -68,12 +70,15 @@ async function resetPassword() {
 
 async function signOut() { await supabaseClient.auth.signOut(); }
 
-function showAuthError(msg) { document.getElementById("auth-error").textContent = msg; }
+function showAuthError(msg) {
+    const el = document.getElementById("auth-error");
+    if (el) el.textContent = msg;
+}
 
 function toggleAuth() {
     const m = document.getElementById("auth-modal");
     m.style.display = m.style.display === "none" ? "flex" : "none";
-    document.getElementById("auth-error").textContent = "";
+    showAuthError("");
 }
 
 // ========== СОСТОЯНИЕ ==========
@@ -118,13 +123,13 @@ map.on("draw:created", function(e) {
     document.getElementById("analyze-btn").style.display = "block";
 });
 
-// ========== ОПРЕДЕЛЕНИЕ ГОРОДА ==========
+// ========== ГОРОД ==========
 async function detectCity() {
     try {
         const r = await fetch("/api/detect-city");
         const d = await r.json();
         map.setView([d.lat, d.lon], 13);
-        addBotMessage("Привет! Я AI-урбанист. Похоже, вы в городе " + d.city + ". Выделите область на карте, и я проанализирую район.");
+        addBotMessage("Привет! Я AI-урбанист. Похоже, вы в городе " + d.city + ". Выделите область на карте для анализа.");
     } catch(e) {
         addBotMessage("Привет! Выделите область на карте для анализа.");
     }
@@ -193,30 +198,35 @@ async function analyzeArea() {
         showScores(data.scores);
 
         const s = data.scores;
-        addBotMessage("✅ Район проанализирован!\n\nИндекс: "+s.overall+"/100\nНайдено "+s.total_places+" организаций на "+s.area_km2+" км²\n\nКликайте по категориям для фильтрации на карте.");
+        addBotMessage("✅ Готово! Индекс района: " + s.overall + "/100\nНайдено " + s.total_places + " мест на " + s.area_km2 + " км²\n\nКликайте по категориям — фильтр на карте.");
         document.getElementById("report-btn").style.display = "block";
         document.getElementById("quick-questions").style.display = "flex";
-    } catch(e) { addBotMessage("❌ Ошибка: " + e.message); }
-    finally { btn.disabled = false; btn.textContent = "Анализировать район"; }
+    } catch(e) {
+        addBotMessage("❌ Ошибка: " + e.message);
+    } finally {
+        btn.disabled = false; btn.textContent = "Анализировать район";
+    }
 }
 
-// ========== ФИЛЬТР ПО КАТЕГОРИЯМ ==========
+// ========== ФИЛЬТРЫ ==========
 const CAT_MAP = {
-    "Еда": ["cafe","restaurant","fast_food","bar","pub","food_court","biergarten"],
-    "Здоровье": ["pharmacy","clinic","dentist","doctors","hospital","veterinary"],
-    "Шопинг": ["clothes","shoes","supermarket","convenience","electronics","mobile_phone","books","gift","florist","jewelry","cosmetics"],
-    "Спорт": ["gym","fitness_centre","sports_centre","swimming_pool","yoga"],
-    "Образование": ["school","kindergarten","university","college","language_school","library"],
-    "Досуг": ["cinema","theatre","museum","playground","nightclub","arts_centre","escape_game"],
-    "Разнообразие": []
+    "Еда":        ["cafe","restaurant","fast_food","bar","pub","food_court","biergarten"],
+    "Здоровье":   ["pharmacy","clinic","dentist","doctors","hospital","veterinary"],
+    "Шопинг":     ["clothes","shoes","supermarket","convenience","electronics","mobile_phone","books","gift","florist","jewelry","cosmetics"],
+    "Спорт":      ["gym","fitness_centre","sports_centre","swimming_pool","yoga"],
+    "Образование":["school","kindergarten","university","college","language_school","library"],
+    "Досуг":      ["cinema","theatre","museum","playground","nightclub","arts_centre","escape_game"],
+    "Разнообразие":[]
+};
+
+const CAT_COLORS = {
+    "Еда":"#feca57", "Здоровье":"#ff6b6b", "Шопинг":"#48dbfb",
+    "Спорт":"#1dd1a1", "Образование":"#54a0ff", "Досуг":"#f093fb",
+    "Разнообразие":"#667eea"
 };
 
 function toggleFilter(category) {
-    if (state.activeFilter === category) {
-        state.activeFilter = null;
-    } else {
-        state.activeFilter = category;
-    }
+    state.activeFilter = (state.activeFilter === category) ? null : category;
     renderFilteredMarkers();
     showScores(state.scores);
 }
@@ -225,39 +235,21 @@ function renderFilteredMarkers() {
     if (state.markersLayer) map.removeLayer(state.markersLayer);
     state.markersLayer = L.layerGroup();
 
-    const catColors = {
-        "Еда": "#feca57",
-        "Здоровье": "#ff6b6b",
-        "Шопинг": "#48dbfb",
-        "Спорт": "#1dd1a1",
-        "Образование": "#54a0ff",
-        "Досуг": "#f093fb",
-        "Разнообразие": "#667eea"
-    };
-
     state.organizations.forEach(o => {
         if (state.activeFilter && state.activeFilter !== "Разнообразие") {
             const allowed = CAT_MAP[state.activeFilter] || [];
             if (!allowed.includes(o.amenity)) return;
         }
-
-        const color = state.activeFilter
-            ? (catColors[state.activeFilter] || "#667eea")
-            : "#667eea";
-
+        const color = state.activeFilter ? (CAT_COLORS[state.activeFilter] || "#667eea") : "#667eea";
         L.circleMarker([o.lat, o.lon], {
-            radius: 5,
-            color: color,
-            fillColor: color,
-            fillOpacity: 0.85,
-            weight: 1
+            radius:5, color:color, fillColor:color, fillOpacity:0.85, weight:1
         }).bindTooltip(o.name + " (" + o.amenity + ")").addTo(state.markersLayer);
     });
 
     state.markersLayer.addTo(map);
 }
 
-// ========== ПОКАЗ МЕТРИК ==========
+// ========== МЕТРИКИ ==========
 function showScores(s) {
     const panel = document.getElementById("scores-panel");
     panel.style.display = "block";
@@ -270,24 +262,27 @@ function showScores(s) {
         {label:"Досуг", value:s.entertainment},
         {label:"Разнообразие", value:s.diversity}
     ];
+
     let html = '<div class="score-badge"><div class="score-big">'+s.overall+'/100</div><div class="score-sub">ИНДЕКС РАЙОНА</div></div>';
 
     if (state.activeFilter) {
-        html += '<div style="text-align:center;font-size:11px;color:#667eea;margin-bottom:6px;">Фильтр: ' + state.activeFilter + ' — нажмите снова для сброса</div>';
+        html += '<div style="text-align:center;font-size:11px;color:#667eea;margin-bottom:6px;padding:4px 8px;background:rgba(102,126,234,0.1);border-radius:6px;">Фильтр: <b>' + state.activeFilter + '</b> — нажмите снова для сброса</div>';
     }
 
     metrics.forEach(m => {
         const color = m.value>=60?"#4CAF50":m.value>=30?"#FFC107":"#f44336";
         const isActive = state.activeFilter === m.label;
-        const activeBg = isActive ? "background:rgba(102,126,234,0.2);border-radius:8px;border:1px solid #667eea;" : "";
+        const dotColor = CAT_COLORS[m.label] || "#667eea";
+        const activeBg = isActive ? "background:rgba(102,126,234,0.15);border-radius:8px;border:1px solid rgba(102,126,234,0.4);" : "";
 
-        html += '<div class="metric" style="cursor:pointer;padding:6px 4px;'+activeBg+'" onclick="toggleFilter(\''+m.label+'\')">';
+        html += '<div class="metric" style="cursor:pointer;padding:6px 6px;margin:2px 0;'+activeBg+'" onclick="toggleFilter(\''+m.label+'\')" title="Фильтровать по: '+m.label+'">';
+        html += '<span style="width:8px;height:8px;border-radius:50%;background:'+dotColor+';display:inline-block;margin-right:6px;flex-shrink:0;"></span>';
         html += '<span class="metric-label" style="'+(isActive?"color:#fff;font-weight:600;":"")+'">'+m.label+'</span>';
         html += '<div class="metric-bar-bg"><div class="metric-bar-fill" style="width:'+m.value+'%;background:'+color+'"></div></div>';
         html += '<span class="metric-value">'+m.value+'</span>';
-        if (isActive) html += '<span style="color:#667eea;font-size:10px;margin-left:4px;">✓</span>';
         html += '</div>';
     });
+
     panel.innerHTML = html;
 }
 
@@ -297,15 +292,34 @@ async function generateReport() {
     btn.disabled = true; btn.textContent = "Генерируем...";
     try {
         const r = await fetch("/api/report", {
-            method:"POST", headers:{"Content-Type":"application/json"},
+            method:"POST",
+            headers:{"Content-Type":"application/json"},
             body: JSON.stringify({org_text: state.orgText, scores: state.scores})
         });
+
+        if (!r.ok) {
+            const errText = await r.text();
+            addBotMessage("❌ Ошибка сервера: " + r.status + " — " + errText.substring(0, 100));
+            return;
+        }
+
         const data = await r.json();
+
+        if (!data.report) {
+            addBotMessage("❌ Пустой ответ от сервера");
+            return;
+        }
+
         document.getElementById("report-text").innerHTML = markdownToHtml(data.report);
         renderCharts();
         document.getElementById("report-modal").style.display = "flex";
-    } catch(e) { addBotMessage("Ошибка генерации отчёта"); }
-    finally { btn.disabled = false; btn.textContent = "Полный отчёт"; }
+
+    } catch(e) {
+        addBotMessage("❌ Ошибка отчёта: " + e.message);
+        console.error("Report error:", e);
+    } finally {
+        btn.disabled = false; btn.textContent = "Полный отчёт";
+    }
 }
 
 function renderCharts() {
@@ -319,10 +333,10 @@ function renderCharts() {
         type: "doughnut",
         data: { labels: catLabels, datasets: [{ data: catValues, backgroundColor: colors, borderWidth: 0 }] },
         options: {
-            responsive: true, maintainAspectRatio: false,
+            responsive:true, maintainAspectRatio:false,
             plugins: {
-                legend: { position:"right", labels:{color:"#ccc",font:{size:11},padding:8} },
-                title: { display:true, text:"Категории организаций", color:"#fff", font:{size:14} }
+                legend: {position:"right", labels:{color:"#ccc",font:{size:11},padding:8}},
+                title: {display:true, text:"Категории организаций", color:"#fff", font:{size:14}}
             }
         }
     });
@@ -334,53 +348,47 @@ function renderCharts() {
 
     if (state.barChart) state.barChart.destroy();
     state.barChart = new Chart(document.getElementById("barChart").getContext("2d"), {
-        type: "bar",
-        data: { labels: barLabels, datasets: [{ data: barValues, backgroundColor: barColors, borderWidth: 0, borderRadius: 4 }] },
-        options: {
+        type:"bar",
+        data:{labels:barLabels, datasets:[{data:barValues, backgroundColor:barColors, borderWidth:0, borderRadius:4}]},
+        options:{
             indexAxis:"y", responsive:true, maintainAspectRatio:false,
-            scales: {
-                x: { max:100, ticks:{color:"#888"}, grid:{color:"rgba(255,255,255,0.05)"} },
-                y: { ticks:{color:"#ccc"}, grid:{display:false} }
+            scales:{
+                x:{max:100, ticks:{color:"#888"}, grid:{color:"rgba(255,255,255,0.05)"}},
+                y:{ticks:{color:"#ccc"}, grid:{display:false}}
             },
-            plugins: { legend:{display:false}, title:{display:true,text:"Оценки инфраструктуры",color:"#fff",font:{size:14}} }
+            plugins:{legend:{display:false}, title:{display:true,text:"Оценки инфраструктуры",color:"#fff",font:{size:14}}}
         }
     });
 
     if (state.radarChart) state.radarChart.destroy();
     state.radarChart = new Chart(document.getElementById("radarChart").getContext("2d"), {
-        type: "radar",
-        data: {
-            labels: barLabels,
-            datasets: [{
-                label: "Этот район",
-                data: barValues,
-                backgroundColor: "rgba(102,126,234,0.2)",
-                borderColor: "#667eea",
-                borderWidth: 2,
-                pointBackgroundColor: "#667eea",
-                pointRadius: 4
+        type:"radar",
+        data:{
+            labels:barLabels,
+            datasets:[{
+                label:"Этот район",
+                data:barValues,
+                backgroundColor:"rgba(102,126,234,0.2)",
+                borderColor:"#667eea", borderWidth:2,
+                pointBackgroundColor:"#667eea", pointRadius:4
             },{
-                label: "Среднее",
-                data: [50,50,50,50,50,50,50],
-                backgroundColor: "rgba(255,255,255,0.05)",
-                borderColor: "rgba(255,255,255,0.3)",
-                borderWidth: 1,
-                borderDash: [5,5],
-                pointRadius: 0
+                label:"Среднее",
+                data:[50,50,50,50,50,50,50],
+                backgroundColor:"rgba(255,255,255,0.05)",
+                borderColor:"rgba(255,255,255,0.3)",
+                borderWidth:1, borderDash:[5,5], pointRadius:0
             }]
         },
-        options: {
-            responsive: true, maintainAspectRatio: false,
-            scales: {
-                r: {
-                    min:0, max:100,
-                    ticks:{color:"#666",backdropColor:"transparent",stepSize:25},
-                    grid:{color:"rgba(255,255,255,0.08)"},
-                    pointLabels:{color:"#ccc",font:{size:12}},
-                    angleLines:{color:"rgba(255,255,255,0.08)"}
-                }
-            },
-            plugins: {
+        options:{
+            responsive:true, maintainAspectRatio:false,
+            scales:{r:{
+                min:0, max:100,
+                ticks:{color:"#666",backdropColor:"transparent",stepSize:25},
+                grid:{color:"rgba(255,255,255,0.08)"},
+                pointLabels:{color:"#ccc",font:{size:12}},
+                angleLines:{color:"rgba(255,255,255,0.08)"}
+            }},
+            plugins:{
                 legend:{position:"bottom",labels:{color:"#ccc",font:{size:11}}},
                 title:{display:true,text:"Профиль района",color:"#fff",font:{size:14}}
             }
@@ -390,13 +398,14 @@ function renderCharts() {
 
 function closeReport() { document.getElementById("report-modal").style.display = "none"; }
 
-// ========== PDF МНОГОСТРАНИЧНЫЙ ==========
+// ========== PDF ==========
 async function exportPDF() {
-    const btn = document.querySelector(".btn-pdf");
-    if (btn) { btn.disabled = true; btn.textContent = "Генерируем PDF..."; }
+    const btn = document.getElementById("pdf-btn");
+    if (btn) { btn.disabled = true; btn.textContent = "Создаём PDF..."; }
 
     try {
         const element = document.getElementById("report-export-area");
+
         const canvas = await html2canvas(element, {
             scale: 2,
             backgroundColor: "#1e1e36",
@@ -404,40 +413,37 @@ async function exportPDF() {
             logging: false
         });
 
-        const imgData = canvas.toDataURL("image/jpeg", 0.95);
+        const imgData = canvas.toDataURL("image/jpeg", 0.92);
         const pdf = new jspdf.jsPDF("p", "mm", "a4");
 
-        const pageWidth = 210;
-        const pageHeight = 297;
-        const margin = 0;
+        const pageW = 210;
+        const pageH = 297;
+        const imgW = pageW;
+        const imgH = canvas.height * imgW / canvas.width;
 
-        const imgWidth = pageWidth - margin * 2;
-        const imgHeight = canvas.height * imgWidth / canvas.width;
+        let yOffset = 0;
+        let pageNum = 0;
 
-        let heightLeft = imgHeight;
-        let position = margin;
-        let page = 0;
-
-        while (heightLeft > 0) {
-            if (page > 0) pdf.addPage();
-            pdf.addImage(imgData, "JPEG", margin, position - page * pageHeight, imgWidth, imgHeight);
-            heightLeft -= pageHeight;
-            position += pageHeight;
-            page++;
+        while (yOffset < imgH) {
+            if (pageNum > 0) pdf.addPage();
+            pdf.addImage(imgData, "JPEG", 0, -yOffset, imgW, imgH);
+            yOffset += pageH;
+            pageNum++;
         }
 
+        const totalPages = pageNum;
         const date = new Date().toLocaleDateString("ru-RU");
         pdf.setFontSize(8);
-        pdf.setTextColor(150);
-        for (let i = 1; i <= page; i++) {
+        pdf.setTextColor(120, 120, 120);
+        for (let i = 1; i <= totalPages; i++) {
             pdf.setPage(i);
-            pdf.text("Портрет квартала • " + date + " • Стр. " + i + " из " + page, 105, 292, {align:"center"});
+            pdf.text("Портрет квартала  •  " + date + "  •  " + i + " / " + totalPages, 105, 293, {align:"center"});
         }
 
-        pdf.save("quarter-report-" + Date.now() + ".pdf");
+        pdf.save("quarter-report.pdf");
     } catch(e) {
         console.error("PDF error:", e);
-        alert("Ошибка PDF: " + e.message);
+        addBotMessage("❌ Ошибка PDF: " + e.message);
     } finally {
         if (btn) { btn.disabled = false; btn.textContent = "📄 PDF"; }
     }
@@ -445,29 +451,34 @@ async function exportPDF() {
 
 // ========== ЧАТ ==========
 function addBotMessage(text) {
-    state.chatHistory.push({role:"assistant",content:text});
+    state.chatHistory.push({role:"assistant", content:text});
     const c = document.getElementById("chat-messages");
     const div = document.createElement("div");
     div.className = "message msg-assistant";
     div.innerHTML = markdownToHtml(text);
-    c.appendChild(div); c.scrollTop = c.scrollHeight;
+    c.appendChild(div);
+    c.scrollTop = c.scrollHeight;
 }
 
 function addUserMessage(text) {
-    state.chatHistory.push({role:"user",content:text});
+    state.chatHistory.push({role:"user", content:text});
     const c = document.getElementById("chat-messages");
     const div = document.createElement("div");
     div.className = "message msg-user";
     div.textContent = text;
-    c.appendChild(div); c.scrollTop = c.scrollHeight;
+    c.appendChild(div);
+    c.scrollTop = c.scrollHeight;
 }
 
 function addLoading() {
+    removeLoading();
     const c = document.getElementById("chat-messages");
     const div = document.createElement("div");
-    div.className = "message msg-loading"; div.id = "loading-msg";
-    div.innerHTML = '<span>.</span><span>.</span><span>.</span>';
-    c.appendChild(div); c.scrollTop = c.scrollHeight;
+    div.className = "message msg-loading";
+    div.id = "loading-msg";
+    div.innerHTML = "<span>.</span><span>.</span><span>.</span>";
+    c.appendChild(div);
+    c.scrollTop = c.scrollHeight;
 }
 
 function removeLoading() {
@@ -480,27 +491,50 @@ async function sendMessage() {
     const text = input.value.trim();
     if (!text) return;
     input.value = "";
-    addUserMessage(text); addLoading();
+    addUserMessage(text);
+    addLoading();
     try {
         const r = await fetch("/api/chat", {
-            method:"POST", headers:{"Content-Type":"application/json"},
-            body: JSON.stringify({question:text,org_text:state.orgText,scores:state.scores,history:state.chatHistory.slice(-6)})
+            method:"POST",
+            headers:{"Content-Type":"application/json"},
+            body: JSON.stringify({
+                question: text,
+                org_text: state.orgText,
+                scores: state.scores,
+                history: state.chatHistory.slice(-6)
+            })
         });
         const data = await r.json();
-        removeLoading(); addBotMessage(data.answer);
-    } catch(e) { removeLoading(); addBotMessage("Ошибка: "+e.message); }
+        removeLoading();
+        addBotMessage(data.answer);
+    } catch(e) {
+        removeLoading();
+        addBotMessage("❌ Ошибка: " + e.message);
+    }
 }
 
 async function askQuick(q) {
-    addUserMessage(q); addLoading();
+    if (!q) return;
+    addUserMessage(q);
+    addLoading();
     try {
         const r = await fetch("/api/chat", {
-            method:"POST", headers:{"Content-Type":"application/json"},
-            body: JSON.stringify({question:q,org_text:state.orgText,scores:state.scores,history:state.chatHistory.slice(-6)})
+            method:"POST",
+            headers:{"Content-Type":"application/json"},
+            body: JSON.stringify({
+                question: q,
+                org_text: state.orgText,
+                scores: state.scores,
+                history: state.chatHistory.slice(-6)
+            })
         });
         const data = await r.json();
-        removeLoading(); addBotMessage(data.answer);
-    } catch(e) { removeLoading(); addBotMessage("Ошибка"); }
+        removeLoading();
+        addBotMessage(data.answer);
+    } catch(e) {
+        removeLoading();
+        addBotMessage("❌ Ошибка: " + e.message);
+    }
 }
 
 document.getElementById("chat-input").addEventListener("keypress", function(e) {
@@ -516,7 +550,7 @@ document.addEventListener("click", function(e) {
 function markdownToHtml(text) {
     if (!text) return "";
     return text
-        .replace(/## (.*)/g, "<h2>$1</h2>")
+        .replace(/## (.*?)(<br>|$)/g, "<h2>$1</h2>")
         .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
         .replace(/\*(.*?)\*/g, "<em>$1</em>")
         .replace(/\n/g, "<br>");
