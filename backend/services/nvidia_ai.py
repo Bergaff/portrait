@@ -1,17 +1,25 @@
-from openai import OpenAI
 import os
+from openai import OpenAI
+
+api_key = os.environ.get("NVIDIA_API_KEY", "")
+
+if not api_key:
+    print("WARNING: NVIDIA_API_KEY not set!")
+
 nvidia_client = OpenAI(
-    api_key=os.environ.get("NVIDIA_API_KEY", ""),
+    api_key=api_key,
     base_url="https://integrate.api.nvidia.com/v1"
-)
+) if api_key else None
 
 def ask_nvidia(prompt):
+    if not nvidia_client:
+        return "AI недоступен: ключ не настроен. Обратитесь к администратору."
     try:
         r = nvidia_client.chat.completions.create(
             model="meta/llama-3.3-70b-instruct",
             messages=[{"role": "user", "content": prompt}],
-            max_tokens=2000,
-            temperature=0.7
+            max_tokens=1500,
+            temperature=0.6
         )
         return r.choices[0].message.content.strip()
     except Exception as e:
