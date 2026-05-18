@@ -94,7 +94,9 @@ let state = {
     pieChart: null,
     barChart: null,
     radarChart: null,
-    activeFilter: null
+    activeFilter: null,
+    reportCache: null,      // кэш отчёта
+    chatBusy: false         // антиспам чата
 };
 
 // ========== КАРТА ==========
@@ -121,6 +123,7 @@ map.on("draw:created", function(e) {
     const b = e.layer.getBounds();
     state.bbox = b.getSouth()+","+b.getWest()+","+b.getNorth()+","+b.getEast();
     document.getElementById("analyze-btn").style.display = "block";
+    state.reportCache = null; // сбрасываем кэш при новом выделении
 });
 
 // ========== ГОРОД ==========
@@ -172,6 +175,7 @@ async function analyzeArea() {
     if (!state.bbox) return;
     const btn = document.getElementById("analyze-btn");
     btn.disabled = true; btn.textContent = "Анализируем...";
+    state.reportCache = null;
     try {
         const r = await fetch("/api/analyze", {
             method:"POST", headers:{"Content-Type":"application/json"},
@@ -198,7 +202,7 @@ async function analyzeArea() {
         showScores(data.scores);
 
         const s = data.scores;
-        addBotMessage("✅ Готово! Индекс района: " + s.overall + "/100\nНайдено " + s.total_places + " мест на " + s.area_km2 + " км²\n\nКликайте по категориям — фильтр на карте.");
+        addBotMessage("✅ Готово! Индекс: " + s.overall + "/100\nНайдено " + s.total_places + " мест на " + s.area_km2 + " км²\n\nКликайте по категориям — фильтр на карте.");
         document.getElementById("report-btn").style.display = "block";
         document.getElementById("quick-questions").style.display = "flex";
     } catch(e) {
@@ -220,8 +224,8 @@ const CAT_MAP = {
 };
 
 const CAT_COLORS = {
-    "Еда":"#feca57", "Здоровье":"#ff6b6b", "Шопинг":"#48dbfb",
-    "Спорт":"#1dd1a1", "Образование":"#54a0ff", "Досуг":"#f093fb",
+    "Еда":"#feca57","Здоровье":"#ff6b6b","Шопинг":"#48dbfb",
+    "Спорт":"#1dd1a1","Образование":"#54a0ff","Досуг":"#f093fb",
     "Разнообразие":"#667eea"
 };
 
@@ -275,7 +279,7 @@ function showScores(s) {
         const dotColor = CAT_COLORS[m.label] || "#667eea";
         const activeBg = isActive ? "background:rgba(102,126,234,0.15);border-radius:8px;border:1px solid rgba(102,126,234,0.4);" : "";
 
-        html += '<div class="metric" style="cursor:pointer;padding:6px 6px;margin:2px 0;'+activeBg+'" onclick="toggleFilter(\''+m.label+'\')" title="Фильтровать по: '+m.label+'">';
+        html += '<div class="metric" style="cursor:pointer;padding:6px 6px;margin:2px 0;'+activeBg+'" onclick="toggleFilter(\''+m.label+'\')" title="Фильтр: '+m.label+'">';
         html += '<span style="width:8px;height:8px;border-radius:50%;background:'+dotColor+';display:inline-block;margin-right:6px;flex-shrink:0;"></span>';
         html += '<span class="metric-label" style="'+(isActive?"color:#fff;font-weight:600;":"")+'">'+m.label+'</span>';
         html += '<div class="metric-bar-bg"><div class="metric-bar-fill" style="width:'+m.value+'%;background:'+color+'"></div></div>';
@@ -286,9 +290,18 @@ function showScores(s) {
     panel.innerHTML = html;
 }
 
-// ========== ОТЧЁТ ==========
+// ========== ОТЧЁТ С КЭШЕМ ==========
 async function generateReport() {
     const btn = document.getElementById("report-btn");
+
+    // Если отчёт уже есть — просто открываем
+    if (state.reportCache) {
+        document.getElementById("report-text").innerHTML = markdownToHtml(state.reportCache);
+        renderCharts();
+        document.getElementById("report-modal").style.display = "flex";
+        return;
+    }
+
     btn.disabled = true; btn.textContent = "Генерируем...";
     try {
         const r = await fetch("/api/report", {
@@ -299,24 +312,20 @@ async function generateReport() {
 
         if (!r.ok) {
             const errText = await r.text();
-            addBotMessage("❌ Ошибка сервера: " + r.status + " — " + errText.substring(0, 100));
+            addBotMessage("❌ Ошибка сервера " + r.status + ": " + errText.substring(0, 150));
             return;
         }
 
         const data = await r.json();
+        if (!data.report) { addBotMessage("❌ Пустой ответ"); return; }
 
-        if (!data.report) {
-            addBotMessage("❌ Пустой ответ от сервера");
-            return;
-        }
-
+        state.reportCache = data.report; // сохраняем в кэш
         document.getElementById("report-text").innerHTML = markdownToHtml(data.report);
         renderCharts();
         document.getElementById("report-modal").style.display = "flex";
 
     } catch(e) {
         addBotMessage("❌ Ошибка отчёта: " + e.message);
-        console.error("Report error:", e);
     } finally {
         btn.disabled = false; btn.textContent = "Полный отчёт";
     }
@@ -330,13 +339,13 @@ function renderCharts() {
 
     if (state.pieChart) state.pieChart.destroy();
     state.pieChart = new Chart(document.getElementById("pieChart").getContext("2d"), {
-        type: "doughnut",
-        data: { labels: catLabels, datasets: [{ data: catValues, backgroundColor: colors, borderWidth: 0 }] },
-        options: {
+        type:"doughnut",
+        data:{labels:catLabels, datasets:[{data:catValues, backgroundColor:colors, borderWidth:0}]},
+        options:{
             responsive:true, maintainAspectRatio:false,
-            plugins: {
-                legend: {position:"right", labels:{color:"#ccc",font:{size:11},padding:8}},
-                title: {display:true, text:"Категории организаций", color:"#fff", font:{size:14}}
+            plugins:{
+                legend:{position:"right",labels:{color:"#ccc",font:{size:11},padding:8}},
+                title:{display:true,text:"Категории организаций",color:"#fff",font:{size:14}}
             }
         }
     });
@@ -349,14 +358,14 @@ function renderCharts() {
     if (state.barChart) state.barChart.destroy();
     state.barChart = new Chart(document.getElementById("barChart").getContext("2d"), {
         type:"bar",
-        data:{labels:barLabels, datasets:[{data:barValues, backgroundColor:barColors, borderWidth:0, borderRadius:4}]},
+        data:{labels:barLabels,datasets:[{data:barValues,backgroundColor:barColors,borderWidth:0,borderRadius:4}]},
         options:{
-            indexAxis:"y", responsive:true, maintainAspectRatio:false,
+            indexAxis:"y",responsive:true,maintainAspectRatio:false,
             scales:{
-                x:{max:100, ticks:{color:"#888"}, grid:{color:"rgba(255,255,255,0.05)"}},
-                y:{ticks:{color:"#ccc"}, grid:{display:false}}
+                x:{max:100,ticks:{color:"#888"},grid:{color:"rgba(255,255,255,0.05)"}},
+                y:{ticks:{color:"#ccc"},grid:{display:false}}
             },
-            plugins:{legend:{display:false}, title:{display:true,text:"Оценки инфраструктуры",color:"#fff",font:{size:14}}}
+            plugins:{legend:{display:false},title:{display:true,text:"Оценки инфраструктуры",color:"#fff",font:{size:14}}}
         }
     });
 
@@ -366,23 +375,21 @@ function renderCharts() {
         data:{
             labels:barLabels,
             datasets:[{
-                label:"Этот район",
-                data:barValues,
+                label:"Этот район",data:barValues,
                 backgroundColor:"rgba(102,126,234,0.2)",
-                borderColor:"#667eea", borderWidth:2,
-                pointBackgroundColor:"#667eea", pointRadius:4
+                borderColor:"#667eea",borderWidth:2,
+                pointBackgroundColor:"#667eea",pointRadius:4
             },{
-                label:"Среднее",
-                data:[50,50,50,50,50,50,50],
+                label:"Среднее",data:[50,50,50,50,50,50,50],
                 backgroundColor:"rgba(255,255,255,0.05)",
                 borderColor:"rgba(255,255,255,0.3)",
-                borderWidth:1, borderDash:[5,5], pointRadius:0
+                borderWidth:1,borderDash:[5,5],pointRadius:0
             }]
         },
         options:{
-            responsive:true, maintainAspectRatio:false,
+            responsive:true,maintainAspectRatio:false,
             scales:{r:{
-                min:0, max:100,
+                min:0,max:100,
                 ticks:{color:"#666",backdropColor:"transparent",stepSize:25},
                 grid:{color:"rgba(255,255,255,0.08)"},
                 pointLabels:{color:"#ccc",font:{size:12}},
@@ -398,7 +405,7 @@ function renderCharts() {
 
 function closeReport() { document.getElementById("report-modal").style.display = "none"; }
 
-// ========== PDF ==========
+// ========== PDF ИСПРАВЛЕННЫЙ ==========
 async function exportPDF() {
     const btn = document.getElementById("pdf-btn");
     if (btn) { btn.disabled = true; btn.textContent = "Создаём PDF..."; }
@@ -406,41 +413,65 @@ async function exportPDF() {
     try {
         const element = document.getElementById("report-export-area");
 
+        // Временно убираем скролл чтобы захватить всё
+        const prevMaxH = element.style.maxHeight;
+        const prevOverflow = element.style.overflow;
+        element.style.maxHeight = "none";
+        element.style.overflow = "visible";
+
+        await new Promise(r => setTimeout(r, 300)); // ждём рендер
+
         const canvas = await html2canvas(element, {
-            scale: 2,
+            scale: 1.5,
             backgroundColor: "#1e1e36",
             useCORS: true,
-            logging: false
+            logging: false,
+            windowWidth: element.scrollWidth,
+            windowHeight: element.scrollHeight
         });
 
-        const imgData = canvas.toDataURL("image/jpeg", 0.92);
-        const pdf = new jspdf.jsPDF("p", "mm", "a4");
+        element.style.maxHeight = prevMaxH;
+        element.style.overflow = prevOverflow;
 
+        const pdf = new jspdf.jsPDF("p", "mm", "a4");
         const pageW = 210;
         const pageH = 297;
-        const imgW = pageW;
-        const imgH = canvas.height * imgW / canvas.width;
+        const margin = 8;
+        const contentW = pageW - margin * 2;
 
-        let yOffset = 0;
-        let pageNum = 0;
+        // Режем canvas на страницы по пикселям
+        const pxPerMm = canvas.width / contentW;
+        const pageHeightPx = pageH * pxPerMm;
+        const totalPages = Math.ceil(canvas.height / pageHeightPx);
 
-        while (yOffset < imgH) {
-            if (pageNum > 0) pdf.addPage();
-            pdf.addImage(imgData, "JPEG", 0, -yOffset, imgW, imgH);
-            yOffset += pageH;
-            pageNum++;
-        }
+        for (let page = 0; page < totalPages; page++) {
+            if (page > 0) pdf.addPage();
 
-        const totalPages = pageNum;
-        const date = new Date().toLocaleDateString("ru-RU");
-        pdf.setFontSize(8);
-        pdf.setTextColor(120, 120, 120);
-        for (let i = 1; i <= totalPages; i++) {
-            pdf.setPage(i);
-            pdf.text("Портрет квартала  •  " + date + "  •  " + i + " / " + totalPages, 105, 293, {align:"center"});
+            const srcY = page * pageHeightPx;
+            const srcH = Math.min(pageHeightPx, canvas.height - srcY);
+
+            // Вырезаем кусок canvas
+            const pageCanvas = document.createElement("canvas");
+            pageCanvas.width = canvas.width;
+            pageCanvas.height = srcH;
+            const ctx = pageCanvas.getContext("2d");
+            ctx.drawImage(canvas, 0, srcY, canvas.width, srcH, 0, 0, canvas.width, srcH);
+
+            const imgData = pageCanvas.toDataURL("image/jpeg", 0.92);
+            const imgH = srcH / pxPerMm;
+            pdf.addImage(imgData, "JPEG", margin, margin, contentW, imgH);
+
+            // Номер страницы
+            pdf.setFontSize(8);
+            pdf.setTextColor(120, 120, 120);
+            pdf.text(
+                "Портрет квартала  •  " + new Date().toLocaleDateString("ru-RU") + "  •  " + (page+1) + " / " + totalPages,
+                105, 292, {align:"center"}
+            );
         }
 
         pdf.save("quarter-report.pdf");
+
     } catch(e) {
         console.error("PDF error:", e);
         addBotMessage("❌ Ошибка PDF: " + e.message);
@@ -449,9 +480,9 @@ async function exportPDF() {
     }
 }
 
-// ========== ЧАТ ==========
+// ========== ЧАТ С АНТИСПАМОМ ==========
 function addBotMessage(text) {
-    state.chatHistory.push({role:"assistant", content:text});
+    state.chatHistory.push({role:"assistant",content:text});
     const c = document.getElementById("chat-messages");
     const div = document.createElement("div");
     div.className = "message msg-assistant";
@@ -461,7 +492,7 @@ function addBotMessage(text) {
 }
 
 function addUserMessage(text) {
-    state.chatHistory.push({role:"user", content:text});
+    state.chatHistory.push({role:"user",content:text});
     const c = document.getElementById("chat-messages");
     const div = document.createElement("div");
     div.className = "message msg-user";
@@ -486,11 +517,25 @@ function removeLoading() {
     if (el) el.remove();
 }
 
+function setChatBusy(busy) {
+    state.chatBusy = busy;
+    // Блокируем быстрые кнопки
+    document.querySelectorAll(".btn-quick").forEach(b => {
+        b.disabled = busy;
+        b.style.opacity = busy ? "0.4" : "1";
+    });
+    // Блокируем кнопку отправки
+    const sendBtn = document.getElementById("send-btn");
+    if (sendBtn) sendBtn.disabled = busy;
+}
+
 async function sendMessage() {
+    if (state.chatBusy) return;
     const input = document.getElementById("chat-input");
     const text = input.value.trim();
     if (!text) return;
     input.value = "";
+    setChatBusy(true);
     addUserMessage(text);
     addLoading();
     try {
@@ -498,10 +543,10 @@ async function sendMessage() {
             method:"POST",
             headers:{"Content-Type":"application/json"},
             body: JSON.stringify({
-                question: text,
-                org_text: state.orgText,
-                scores: state.scores,
-                history: state.chatHistory.slice(-6)
+                question:text,
+                org_text:state.orgText,
+                scores:state.scores,
+                history:state.chatHistory.slice(-6)
             })
         });
         const data = await r.json();
@@ -510,11 +555,14 @@ async function sendMessage() {
     } catch(e) {
         removeLoading();
         addBotMessage("❌ Ошибка: " + e.message);
+    } finally {
+        setChatBusy(false);
     }
 }
 
 async function askQuick(q) {
-    if (!q) return;
+    if (!q || state.chatBusy) return;
+    setChatBusy(true);
     addUserMessage(q);
     addLoading();
     try {
@@ -522,10 +570,10 @@ async function askQuick(q) {
             method:"POST",
             headers:{"Content-Type":"application/json"},
             body: JSON.stringify({
-                question: q,
-                org_text: state.orgText,
-                scores: state.scores,
-                history: state.chatHistory.slice(-6)
+                question:q,
+                org_text:state.orgText,
+                scores:state.scores,
+                history:state.chatHistory.slice(-6)
             })
         });
         const data = await r.json();
@@ -534,11 +582,13 @@ async function askQuick(q) {
     } catch(e) {
         removeLoading();
         addBotMessage("❌ Ошибка: " + e.message);
+    } finally {
+        setChatBusy(false);
     }
 }
 
 document.getElementById("chat-input").addEventListener("keypress", function(e) {
-    if (e.key === "Enter") sendMessage();
+    if (e.key === "Enter" && !state.chatBusy) sendMessage();
 });
 
 document.addEventListener("click", function(e) {
@@ -550,7 +600,7 @@ document.addEventListener("click", function(e) {
 function markdownToHtml(text) {
     if (!text) return "";
     return text
-        .replace(/## (.*?)(<br>|$)/g, "<h2>$1</h2>")
+        .replace(/^## (.+)$/gm, "<h2>$1</h2>")
         .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
         .replace(/\*(.*?)\*/g, "<em>$1</em>")
         .replace(/\n/g, "<br>");
