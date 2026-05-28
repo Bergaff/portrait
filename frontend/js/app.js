@@ -1,18 +1,47 @@
 // ========== SUPABASE ==========
+// ========== ВЕРСИЯ ==========
+const APP_VERSION = "0.01";
+
+// ========== SUPABASE ==========
 const { createClient } = supabase;
-const supabaseClient = createClient(SUPABASE_URL, SUPABASE_KEY);
+const supabaseClient = createClient(SUPABASE_URL, SUPABASE_KEY, {
+    auth: {
+        detectSessionInUrl: true,
+        flowType: 'pkce',
+        persistSession: true,
+        autoRefreshToken: true
+    }
+});
 let currentUser = null;
 let userStats = { requests: 0 };
 
-supabaseClient.auth.getSession().then(({ data: { session } }) => {
-    if (session) { currentUser = session.user; updateAuthUI(session.user); loadUserStats(); }
-});
-supabaseClient.auth.onAuthStateChange((event, session) => {
+// Проверяем сессию при загрузке
+async function initAuth() {
+    const { data: { session } } = await supabaseClient.auth.getSession();
     if (session) {
-        currentUser = session.user; updateAuthUI(session.user);
-        document.getElementById("auth-modal").style.display = "none"; loadUserStats();
-    } else { currentUser = null; updateAuthUILoggedOut(); }
+        currentUser = session.user;
+        updateAuthUI(session.user);
+        loadUserStats();
+    } else {
+        updateAuthUILoggedOut();
+    }
+}
+
+supabaseClient.auth.onAuthStateChange((event, session) => {
+    console.log("Auth event:", event, session);
+    if (session && session.user) {
+        currentUser = session.user;
+        updateAuthUI(session.user);
+        document.getElementById("auth-modal").style.display = "none";
+        loadUserStats();
+    } else {
+        currentUser = null;
+        updateAuthUILoggedOut();
+    }
 });
+
+initAuth();
+
 function updateAuthUI(user) {
     document.getElementById("auth-btn").style.display = "none";
     document.getElementById("user-info").style.display = "flex";
@@ -30,13 +59,52 @@ async function socialLogin(provider) {
         }
     });
     if (error) {
-        if (error.message.includes("already registered")) {
-            showAuthError("Аккаунт уже есть. Попробуйте войти через email");
-        } else {
-            showAuthError(error.message);
-        }
+        showAuthError(error.message);
     }
 }
+}
+// ========== MAIL.RU прямая авторизация ==========
+const MAILRU_CLIENT_ID = "019e459104e27d97893914d68e0920e4";
+
+function loginMailruDirect() {
+    const redirectUri = window.location.origin + "/";
+    const authUrl = "https://connect.mail.ru/oauth/authorize?client_id=" + MAILRU_CLIENT_ID +
+        "&response_type=token&redirect_uri=" + encodeURIComponent(redirectUri);
+    window.location.href = authUrl;
+}
+
+// Ловим возврат от Mail.ru
+(function handleMailruCallback() {
+    const hash = window.location.hash;
+    if (hash && hash.includes("access_token=") && hash.includes("token_type")) {
+        // Это похоже на возврат от Mail.ru (не от Supabase)
+        const params = new URLSearchParams(hash.substring(1));
+        const mailruToken = params.get("access_token");
+        if (mailruToken) {
+            fetch("/api/auth/mailru", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ access_token: mailruToken })
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.email) {
+                    // Логиним через email+пароль (создан на бэкенде)
+                    return supabaseClient.auth.signInWithPassword({
+                        email: data.email,
+                        password: data.temp_password
+                    });
+                } else {
+                    showAuthError("Mail.ru: " + (data.detail || "ошибка"));
+                }
+            })
+            .then(() => {
+                window.location.hash = "";
+            })
+            .catch(e => console.error("Mailru error:", e));
+        }
+    }
+})();
 async function emailSignIn() {
     const email = document.getElementById("auth-email").value.trim();
     const pw = document.getElementById("auth-password").value;
@@ -119,6 +187,7 @@ resizer.addEventListener("mousedown", (e) => {
     document.body.style.cursor = "col-resize";
     document.body.style.userSelect = "none";
     e.preventDefault();
+    resizer.classList.add("active");
 });
 
 document.addEventListener("mousemove", (e) => {
@@ -135,6 +204,7 @@ document.addEventListener("mouseup", () => {
         isResizing = false;
         document.body.style.cursor = "";
         document.body.style.userSelect = "";
+        resizer.classList.remove("active");
     }
 });
 
