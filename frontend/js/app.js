@@ -22,9 +22,20 @@ function updateAuthUILoggedOut() {
     document.getElementById("user-info").style.display = "none";
 }
 async function socialLogin(provider) {
-    showAuthError("Открываем...");
-    const { error } = await supabaseClient.auth.signInWithOAuth({ provider, options: { redirectTo: window.location.origin } });
-    if (error) showAuthError(error.message);
+    showAuthError("Открываем " + provider + "...");
+    const { error } = await supabaseClient.auth.signInWithOAuth({
+        provider,
+        options: {
+            redirectTo: window.location.origin
+        }
+    });
+    if (error) {
+        if (error.message.includes("already registered")) {
+            showAuthError("Аккаунт уже есть. Попробуйте войти через email");
+        } else {
+            showAuthError(error.message);
+        }
+    }
 }
 async function emailSignIn() {
     const email = document.getElementById("auth-email").value.trim();
@@ -97,6 +108,35 @@ let state = {
     pieChart:null, barChart:null, radarChart:null,
     activeFilter:null, reportCache:null, chatBusy:false
 };
+
+// ========== RESIZER ЧАТА ==========
+let isResizing = false;
+const resizer = document.getElementById("resizer");
+const chatPanel = document.getElementById("chat-panel");
+
+resizer.addEventListener("mousedown", (e) => {
+    isResizing = true;
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    e.preventDefault();
+});
+
+document.addEventListener("mousemove", (e) => {
+    if (!isResizing) return;
+    const appWidth = document.getElementById("app").offsetWidth;
+    let newWidth = appWidth - e.clientX;
+    newWidth = Math.max(380, Math.min(760, newWidth)); // от 380 до 760px
+    chatPanel.style.width = newWidth + "px";
+    chatPanel.style.minWidth = newWidth + "px";
+});
+
+document.addEventListener("mouseup", () => {
+    if (isResizing) {
+        isResizing = false;
+        document.body.style.cursor = "";
+        document.body.style.userSelect = "";
+    }
+});
 
 // ========== КАРТА ==========
 const map = L.map("map").setView([55.7558, 37.6173], 13);
