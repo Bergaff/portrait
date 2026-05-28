@@ -232,20 +232,29 @@ map.on("draw:created", function(e) {
 });
 
 // ========== ГОРОД — запоминаем в localStorage ==========
+// ========== ГОРОД — запоминаем в localStorage ==========
 let detectedCity = "", detectedLat = 55.7558, detectedLon = 37.6173;
+let cityInitTimeout = null;
 
 function initCity() {
     const saved = localStorage.getItem("qp_city");
     if (saved) {
-        // Уже выбирал город — не показываем модалку
         const data = JSON.parse(saved);
         map.setView([data.lat, data.lon], 13);
         document.getElementById("city-modal").style.display = "none";
         addBotMessage("Привет! Я AI-урбанист 🏘️\n\nГород: " + data.name + "\n\n📍 Выделите область на карте (квадрат или полигон)\n📊 Нажмите «Анализировать»\n🎯 Кликайте по категориям для фильтра на карте");
         return;
     }
-    // Первый визит — показываем модалку
+
     document.getElementById("city-modal").style.display = "flex";
+    
+    // Устанавливаем таймаут на 15 секунд - если не определили город, показываем кнопку "Пропустить"
+    cityInitTimeout = setTimeout(() => {
+        if (!detectedCity) {
+            showCityInput(); // Показываем ввод города, если не удалось определить
+        }
+    }, 15000);
+
     if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
             async (pos) => {
@@ -256,13 +265,22 @@ function initCity() {
                     );
                     const d = await r.json();
                     const city = d.address?.city || d.address?.town || d.address?.village || "Ваш город";
+                    clearTimeout(cityInitTimeout);
                     showCityConfirm(city, pos.coords.latitude, pos.coords.longitude);
-                } catch(e) { showCityConfirm("Ваш город", pos.coords.latitude, pos.coords.longitude); }
+                } catch(e) {
+                    clearTimeout(cityInitTimeout);
+                    detectByIP();
+                }
             },
-            () => detectByIP(),
+            () => {
+                clearTimeout(cityInitTimeout);
+                detectByIP();
+            },
             {timeout: 8000}
         );
-    } else { detectByIP(); }
+    } else {
+        detectByIP();
+    }
 }
 
 async function detectByIP() {
@@ -270,29 +288,41 @@ async function detectByIP() {
         const r = await fetch("https://ipapi.co/json/");
         if (r.ok) {
             const d = await r.json();
-            if (d.city && d.latitude) { showCityConfirm(d.city, d.latitude, d.longitude); return; }
+            if (d.city && d.latitude) {
+                clearTimeout(cityInitTimeout);
+                showCityConfirm(d.city, d.latitude, d.longitude);
+                return;
+            }
         }
     } catch(e) {}
+    clearTimeout(cityInitTimeout);
     showCityInput();
 }
+
 function showCityConfirm(city, lat, lon) {
     detectedCity = city; detectedLat = lat; detectedLon = lon;
     document.getElementById("city-detecting").style.display = "none";
     document.getElementById("city-name-show").textContent = city;
     document.getElementById("city-confirm").style.display = "block";
 }
+
 function showCityInput() {
+    clearTimeout(cityInitTimeout);
     document.getElementById("city-detecting").style.display = "none";
     document.getElementById("city-confirm").style.display = "none";
     document.getElementById("city-input-block").style.display = "block";
 }
+
 function confirmCity() {
+    clearTimeout(cityInitTimeout);
     localStorage.setItem("qp_city", JSON.stringify({name:detectedCity, lat:detectedLat, lon:detectedLon}));
     map.setView([detectedLat, detectedLon], 13);
     document.getElementById("city-modal").style.display = "none";
     addBotMessage("Привет! Я AI-урбанист 🏘️\n\nГород: " + detectedCity + "\n\n📍 Выделите область на карте (квадрат или полигон)\n📊 Нажмите «Анализировать»\n🎯 Кликайте по категориям для фильтра на карте");
 }
+
 function skipCity() {
+    clearTimeout(cityInitTimeout);
     localStorage.setItem("qp_city", JSON.stringify({name:"Москва", lat:55.7558, lon:37.6173}));
     map.setView([55.7558, 37.6173], 13);
     document.getElementById("city-modal").style.display = "none";
