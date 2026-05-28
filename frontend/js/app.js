@@ -62,7 +62,6 @@ async function socialLogin(provider) {
         showAuthError(error.message);
     }
 }
-}
 // ========== MAIL.RU прямая авторизация ==========
 const MAILRU_CLIENT_ID = "019e459104e27d97893914d68e0920e4";
 
