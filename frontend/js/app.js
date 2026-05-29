@@ -1,6 +1,6 @@
 // ========== SUPABASE ==========
 // ========== ВЕРСИЯ ==========
-const APP_VERSION = "0.021";
+const APP_VERSION = "0.022";
 
 // ========== SUPABASE ==========
 const { createClient } = supabase;
@@ -76,36 +76,23 @@ function loginYandexDirect() {
 
 function loginMailruDirect() {
     const redirectUri = window.location.origin + "/";
-    // Используем oauth.mail.ru вместо connect.mail.ru
-    const authUrl = "https://oauth.mail.ru/authorize?client_id=" + MAILRU_CLIENT_ID +
-        "&response_type=token&redirect_uri=" + encodeURIComponent(redirectUri) +
-        "&scope=email%20name&state=mailru";
-    console.log("Mail.ru auth URL:", authUrl);
+    const authUrl = "https://connect.mail.ru/oauth/authorize?client_id=" + MAILRU_CLIENT_ID +
+        "&response_type=code&redirect_uri=" + encodeURIComponent(redirectUri) + "&state=mailru";
     window.location.href = authUrl;
 }
 
 // Обработчик возврата от провайдеров (ПРОВЕРЯЕТ ХЭШ КАЖДЫЕ 500мс)
 let oauthCheckInterval = null;
 
-function checkOAuthCallback() {
+// Обработчик возврата от провайдеров
+(function handleOAuthCallbacks() {
     const hash = window.location.hash;
     if (hash && hash.includes("access_token=")) {
         const params = new URLSearchParams(hash.substring(1));
         const accessToken = params.get("access_token");
-        const provider = params.get("state");
-
-        console.log("OAuth callback received:", { provider, hasToken: !!accessToken });
-
+        const provider = params.get("state"); // 'yandex' или 'mailru'
+        
         if (accessToken && provider) {
-            // Останавливаем проверку
-            if (oauthCheckInterval) {
-                clearInterval(oauthCheckInterval);
-                oauthCheckInterval = null;
-            }
-
-            // Очищаем хэш
-            window.location.hash = "";
-
             showAuthError("Входим через " + provider + "...");
             fetch("/api/auth/" + provider, {
                 method: "POST",
@@ -115,6 +102,7 @@ function checkOAuthCallback() {
             .then(r => r.json())
             .then(data => {
                 if (data.email && data.temp_password) {
+                    // Логинимся в Supabase с паролем, который сгенерировал бэкенд
                     return supabaseClient.auth.signInWithPassword({
                         email: data.email,
                         password: data.temp_password
@@ -124,7 +112,8 @@ function checkOAuthCallback() {
                 }
             })
             .then(() => {
-                window.location.reload();
+                window.location.hash = "";
+                window.location.reload(); // Обновляем страницу, чтобы подхватился профиль
             })
             .catch(e => {
                 console.error("Auth error:", e);
@@ -132,7 +121,7 @@ function checkOAuthCallback() {
             });
         }
     }
-}
+})();
 
 // Запускаем проверку каждые 500мс (на случай если хэш появился позже)
 function startOAuthChecker() {
