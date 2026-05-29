@@ -63,30 +63,46 @@ async function socialLogin(provider) {
     }
 }
 // ========== ПРЯМАЯ АВТОРИЗАЦИЯ (ЯНДЕКС & MAIL.RU) ==========
+// ========== ПРЯМАЯ АВТОРИЗАЦИЯ (ЯНДЕКС & MAIL.RU) ==========
 const YANDEX_CLIENT_ID = "00a282071c984f6c8015bdbe0852a5b8";
 const MAILRU_CLIENT_ID = "019e459104e27d97893914d68e0920e4";
 
 function loginYandexDirect() {
     const redirectUri = window.location.origin + "/";
     const authUrl = "https://oauth.yandex.ru/authorize?response_type=token&client_id=" + YANDEX_CLIENT_ID + "&redirect_uri=" + encodeURIComponent(redirectUri) + "&state=yandex";
+    console.log("Yandex auth URL:", authUrl); // ДЛЯ ОТЛАДКИ
     window.location.href = authUrl;
 }
 
 function loginMailruDirect() {
     const redirectUri = window.location.origin + "/";
     const authUrl = "https://connect.mail.ru/oauth/authorize?client_id=" + MAILRU_CLIENT_ID + "&response_type=token&redirect_uri=" + encodeURIComponent(redirectUri) + "&state=mailru";
+    console.log("Mail.ru auth URL:", authUrl); // ДЛЯ ОТЛАДКИ
     window.location.href = authUrl;
 }
 
-// Обработчик возврата от провайдеров
-(function handleOAuthCallbacks() {
+// Обработчик возврата от провайдеров (ПРОВЕРЯЕТ ХЭШ КАЖДЫЕ 500мс)
+let oauthCheckInterval = null;
+
+function checkOAuthCallback() {
     const hash = window.location.hash;
     if (hash && hash.includes("access_token=")) {
         const params = new URLSearchParams(hash.substring(1));
         const accessToken = params.get("access_token");
-        const provider = params.get("state"); // 'yandex' или 'mailru'
+        const provider = params.get("state");
+
+        console.log("OAuth callback received:", { provider, hasToken: !!accessToken });
 
         if (accessToken && provider) {
+            // Останавливаем проверку
+            if (oauthCheckInterval) {
+                clearInterval(oauthCheckInterval);
+                oauthCheckInterval = null;
+            }
+
+            // Очищаем хэш
+            window.location.hash = "";
+
             showAuthError("Входим через " + provider + "...");
             fetch("/api/auth/" + provider, {
                 method: "POST",
@@ -96,7 +112,6 @@ function loginMailruDirect() {
             .then(r => r.json())
             .then(data => {
                 if (data.email && data.temp_password) {
-                    // Логинимся в Supabase с паролем, который сгенерировал бэкенд
                     return supabaseClient.auth.signInWithPassword({
                         email: data.email,
                         password: data.temp_password
@@ -106,8 +121,7 @@ function loginMailruDirect() {
                 }
             })
             .then(() => {
-                window.location.hash = "";
-                window.location.reload(); // Обновляем страницу, чтобы подхватился профиль
+                window.location.reload();
             })
             .catch(e => {
                 console.error("Auth error:", e);
@@ -115,7 +129,21 @@ function loginMailruDirect() {
             });
         }
     }
-})();
+}
+
+// Запускаем проверку каждые 500мс (на случай если хэш появился позже)
+function startOAuthChecker() {
+    if (oauthCheckInterval) return; // Уже запущен
+    oauthCheckInterval = setInterval(checkOAuthCallback, 500);
+    checkOAuthCallback(); // Первая проверка сразу
+}
+
+// Запускаем при загрузке
+startOAuthChecker();
+
+// Также проверяем при каждом изменении хэша
+window.addEventListener("hashchange", checkOAuthCallback);
+
 async function emailSignIn() {
     const email = document.getElementById("auth-email").value.trim();
     const pw = document.getElementById("auth-password").value;
