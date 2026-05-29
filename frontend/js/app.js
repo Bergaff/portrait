@@ -62,45 +62,57 @@ async function socialLogin(provider) {
         showAuthError(error.message);
     }
 }
-// ========== MAIL.RU прямая авторизация ==========
+// ========== ПРЯМАЯ АВТОРИЗАЦИЯ (ЯНДЕКС & MAIL.RU) ==========
+const YANDEX_CLIENT_ID = "00a282071c984f6c8015bdbe0852a5b8";
 const MAILRU_CLIENT_ID = "019e459104e27d97893914d68e0920e4";
 
-function loginMailruDirect() {
+function loginYandexDirect() {
     const redirectUri = window.location.origin + "/";
-    const authUrl = "https://connect.mail.ru/oauth/authorize?client_id=" + MAILRU_CLIENT_ID +
-        "&response_type=token&redirect_uri=" + encodeURIComponent(redirectUri);
+    const authUrl = "https://oauth.yandex.ru/authorize?response_type=token&client_id=" + YANDEX_CLIENT_ID + "&redirect_uri=" + encodeURIComponent(redirectUri) + "&state=yandex";
     window.location.href = authUrl;
 }
 
-// Ловим возврат от Mail.ru
-(function handleMailruCallback() {
+function loginMailruDirect() {
+    const redirectUri = window.location.origin + "/";
+    const authUrl = "https://connect.mail.ru/oauth/authorize?client_id=" + MAILRU_CLIENT_ID + "&response_type=token&redirect_uri=" + encodeURIComponent(redirectUri) + "&state=mailru";
+    window.location.href = authUrl;
+}
+
+// Обработчик возврата от провайдеров
+(function handleOAuthCallbacks() {
     const hash = window.location.hash;
-    if (hash && hash.includes("access_token=") && hash.includes("token_type")) {
-        // Это похоже на возврат от Mail.ru (не от Supabase)
+    if (hash && hash.includes("access_token=")) {
         const params = new URLSearchParams(hash.substring(1));
-        const mailruToken = params.get("access_token");
-        if (mailruToken) {
-            fetch("/api/auth/mailru", {
+        const accessToken = params.get("access_token");
+        const provider = params.get("state"); // 'yandex' или 'mailru'
+
+        if (accessToken && provider) {
+            showAuthError("Входим через " + provider + "...");
+            fetch("/api/auth/" + provider, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ access_token: mailruToken })
+                body: JSON.stringify({ access_token: accessToken })
             })
             .then(r => r.json())
             .then(data => {
-                if (data.email) {
-                    // Логиним через email+пароль (создан на бэкенде)
+                if (data.email && data.temp_password) {
+                    // Логинимся в Supabase с паролем, который сгенерировал бэкенд
                     return supabaseClient.auth.signInWithPassword({
                         email: data.email,
                         password: data.temp_password
                     });
                 } else {
-                    showAuthError("Mail.ru: " + (data.detail || "ошибка"));
+                    showAuthError("Ошибка: " + (data.detail || "неизвестная"));
                 }
             })
             .then(() => {
                 window.location.hash = "";
+                window.location.reload(); // Обновляем страницу, чтобы подхватился профиль
             })
-            .catch(e => console.error("Mailru error:", e));
+            .catch(e => {
+                console.error("Auth error:", e);
+                showAuthError("Ошибка входа");
+            });
         }
     }
 })();
@@ -247,7 +259,7 @@ function initCity() {
     }
 
     document.getElementById("city-modal").style.display = "flex";
-    
+
     // Устанавливаем таймаут на 15 секунд - если не определили город, показываем кнопку "Пропустить"
     cityInitTimeout = setTimeout(() => {
         if (!detectedCity) {
