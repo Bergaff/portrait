@@ -89,10 +89,32 @@ async def mailru_auth(req: AuthRequest):
     if not MAILRU_CLIENT_SECRET:
         raise HTTPException(status_code=500, detail="Server not configured (Missing MAILRU_SECRET)")
 
+    # Если пришёл код (authorization code flow)
+    if req.access_token.startswith("code_"):
+        # Обмениваем код на токен
+        code = req.access_token.replace("code_", "")
+        token_resp = requests.post(
+            "https://connect.mail.ru/oauth/token",
+            data={
+                "grant_type": "authorization_code",
+                "code": code,
+                "client_id": MAILRU_CLIENT_ID,
+                "client_secret": MAILRU_CLIENT_SECRET,
+                "redirect_uri": "https://portrait-production-20c1.up.railway.app/"
+            },
+            timeout=10
+        )
+        if token_resp.status_code != 200:
+            raise HTTPException(status_code=400, detail="Mail.ru token exchange failed")
+        access_token = token_resp.json().get("access_token")
+    else:
+        access_token = req.access_token  # Если всё же пришёл токен (на всякий случай)
+
+    # Далее как было: получаем данные пользователя
     params = {
         "method": "users.getInfo",
         "app_id": MAILRU_CLIENT_ID,
-        "session_key": req.access_token,
+        "session_key": access_token,
         "secure": "1"
     }
     sorted_keys = sorted(params.keys())
