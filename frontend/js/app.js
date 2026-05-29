@@ -1,6 +1,6 @@
 // ========== SUPABASE ==========
 // ========== ВЕРСИЯ ==========
-const APP_VERSION = "0.02";
+const APP_VERSION = "0.021";
 
 // ========== SUPABASE ==========
 const { createClient } = supabase;
@@ -76,8 +76,11 @@ function loginYandexDirect() {
 
 function loginMailruDirect() {
     const redirectUri = window.location.origin + "/";
-    const authUrl = "https://connect.mail.ru/oauth/authorize?client_id=" + MAILRU_CLIENT_ID + "&response_type=token&redirect_uri=" + encodeURIComponent(redirectUri) + "&state=mailru";
-    console.log("Mail.ru auth URL:", authUrl); // ДЛЯ ОТЛАДКИ
+    // Используем oauth.mail.ru вместо connect.mail.ru
+    const authUrl = "https://oauth.mail.ru/authorize?client_id=" + MAILRU_CLIENT_ID +
+        "&response_type=token&redirect_uri=" + encodeURIComponent(redirectUri) +
+        "&scope=email%20name&state=mailru";
+    console.log("Mail.ru auth URL:", authUrl);
     window.location.href = authUrl;
 }
 
