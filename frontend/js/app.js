@@ -85,14 +85,74 @@ function loginMailruDirect() {
 let oauthCheckInterval = null;
 
 // Обработчик возврата от провайдеров
+// Обработчик возврата от провайдеров (ПРОВЕРЯЕТ ХЭШ КАЖДЫЕ 500мс)
+let oauthCheckInterval = null;
+
 (function handleOAuthCallbacks() {
+    const searchParams = new URLSearchParams(window.location.search);
+    const hashParams = new URLSearchParams(window.location.hash.substring(1));
+
+    // Mail.ru возвращает code в query string (response_type=code)
+    const code = searchParams.get("code");
+    const error = searchParams.get("error");
+    const state = searchParams.get("state") || hashParams.get("state");
+
+    if (error) {
+        showAuthError("Ошибка авторизации: " + error);
+        window.location.search = "";
+        return;
+    }
+
+    if (code && state === "mailru") {
+        // Останавливаем проверку
+        if (oauthCheckInterval) {
+            clearInterval(oauthCheckInterval);
+            oauthCheckInterval = null;
+        }
+
+        // Очищаем параметры
+        window.location.search = "";
+
+        showAuthError("Входим через Mail.ru...");
+        fetch("/api/auth/mailru", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ access_token: "code_" + code })
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.email && data.temp_password) {
+                return supabaseClient.auth.signInWithPassword({
+                    email: data.email,
+                    password: data.temp_password
+                });
+            } else {
+                showAuthError("Ошибка: " + (data.detail || "неизвестная"));
+            }
+        })
+        .then(() => {
+            window.location.reload();
+        })
+        .catch(e => {
+            console.error("Auth error:", e);
+            showAuthError("Ошибка входа");
+        });
+        return; // Выходим, чтобы не обрабатывать Яндекс
+    }
+
+    // Яндекс (response_type=token) - остаётся как было
     const hash = window.location.hash;
     if (hash && hash.includes("access_token=")) {
         const params = new URLSearchParams(hash.substring(1));
         const accessToken = params.get("access_token");
         const provider = params.get("state"); // 'yandex' или 'mailru'
-        
+
         if (accessToken && provider) {
+            if (oauthCheckInterval) {
+                clearInterval(oauthCheckInterval);
+                oauthCheckInterval = null;
+            }
+            window.location.hash = "";
             showAuthError("Входим через " + provider + "...");
             fetch("/api/auth/" + provider, {
                 method: "POST",
@@ -102,7 +162,6 @@ let oauthCheckInterval = null;
             .then(r => r.json())
             .then(data => {
                 if (data.email && data.temp_password) {
-                    // Логинимся в Supabase с паролем, который сгенерировал бэкенд
                     return supabaseClient.auth.signInWithPassword({
                         email: data.email,
                         password: data.temp_password
@@ -112,8 +171,7 @@ let oauthCheckInterval = null;
                 }
             })
             .then(() => {
-                window.location.hash = "";
-                window.location.reload(); // Обновляем страницу, чтобы подхватился профиль
+                window.location.reload();
             })
             .catch(e => {
                 console.error("Auth error:", e);
