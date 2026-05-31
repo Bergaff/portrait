@@ -74,8 +74,12 @@ function loginYandexDirect() {
 
 function loginMailruDirect() {
     const redirectUri = window.location.origin + "/";
-    const authUrl = "https://connect.mail.ru/oauth/authorize?client_id=" + MAILRU_CLIENT_ID +
-        "&response_type=code&redirect_uri=" + encodeURIComponent(redirectUri) + "&state=mailru";
+    // НОВЫЙ endpoint oauth.mail.ru вместо connect.mail.ru
+    const authUrl = "https://oauth.mail.ru/login?client_id=" + MAILRU_CLIENT_ID +
+        "&response_type=code" +
+        "&scope=" + encodeURIComponent("userinfo openid email profile") +
+        "&redirect_uri=" + encodeURIComponent(redirectUri) +
+        "&state=mailru";
     window.location.href = authUrl;
 }
 
