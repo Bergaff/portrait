@@ -68,7 +68,10 @@ const MAILRU_CLIENT_ID = "019e459104e27d97893914d68e0920e4";
 
 function loginYandexDirect() {
     const redirectUri = window.location.origin + "/";
-    const authUrl = "https://oauth.yandex.ru/authorize?response_type=token&client_id=" + YANDEX_CLIENT_ID + "&redirect_uri=" + encodeURIComponent(redirectUri) + "&state=yandex";
+    const authUrl = "https://oauth.yandex.ru/authorize?response_type=token&client_id=" + YANDEX_CLIENT_ID + 
+        "&redirect_uri=" + encodeURIComponent(redirectUri) + 
+        "&state=yandex" +
+        "&force_confirm=yes";  // ← добавили
     window.location.href = authUrl;
 }
 
