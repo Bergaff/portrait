@@ -1,6 +1,6 @@
 // ========== SUPABASE ==========
 // ========== ВЕРСИЯ ==========
-const APP_VERSION = "0.023";
+const APP_VERSION = "0.024";
 
 // ========== SUPABASE ==========
 const { createClient } = supabase;
@@ -220,39 +220,39 @@ let isResizing = false;
 const resizer = document.getElementById("resizer");
 const chatPanel = document.getElementById("chat-panel");
 
-resizer.addEventListener("mousedown", (e) => {
-    isResizing = true;
-    document.body.style.cursor = "col-resize";
-    document.body.style.userSelect = "none";
-    e.preventDefault();
-    resizer.classList.add("active");
-});
+if (resizer && chatPanel) {
+    resizer.addEventListener("mousedown", (e) => {
+        isResizing = true;
+        document.body.style.cursor = "col-resize";
+        document.body.style.userSelect = "none";
+        e.preventDefault();
+        resizer.classList.add("active");
+    });
 
-document.addEventListener("mousemove", (e) => {
-    if (!isResizing) return;
-    const appWidth = document.getElementById("app").offsetWidth;
-    let newWidth = appWidth - e.clientX;
-    newWidth = Math.max(380, Math.min(760, newWidth));
-    chatPanel.style.width = newWidth + "px";
-    chatPanel.style.minWidth = newWidth + "px";
-    // Обновляем размер карты (важно для Leaflet)
-    if (window.map && window.map.invalidateSize) {
-        window.map.invalidateSize();
-    }
-});
-
-document.addEventListener("mouseup", () => {
-    if (isResizing) {
-        isResizing = false;
-        document.body.style.cursor = "";
-        document.body.style.userSelect = "";
-        resizer.classList.remove("active");
-        // Финальный пересчёт карты
+    document.addEventListener("mousemove", (e) => {
+        if (!isResizing) return;
+        const appWidth = document.getElementById("app").offsetWidth;
+        let newWidth = appWidth - e.clientX;
+        newWidth = Math.max(380, Math.min(760, newWidth));
+        chatPanel.style.width = newWidth + "px";
+        chatPanel.style.minWidth = newWidth + "px";
         if (window.map && window.map.invalidateSize) {
             window.map.invalidateSize();
         }
-    }
-});
+    });
+
+    document.addEventListener("mouseup", () => {
+        if (isResizing) {
+            isResizing = false;
+            document.body.style.cursor = "";
+            document.body.style.userSelect = "";
+            resizer.classList.remove("active");
+            if (window.map && window.map.invalidateSize) {
+                window.map.invalidateSize();
+            }
+        }
+    });
+}
 
 
 // ========== КАРТА ==========
