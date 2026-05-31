@@ -17,16 +17,6 @@ body {
     position: relative;
 }
 
-#resizer {
-    position: absolute;
-    top: 0;
-    right: 380px; /* начальная позиция */
-    width: 6px;
-    height: 100vh;
-    cursor: col-resize;
-    z-index: 1000;
-    background: transparent;
-}
 
 #chat-panel {
     width: 380px;
@@ -266,20 +256,36 @@ body {
     border-color: #667eea;
 }
 
-/* ========== RESIZER ========== */
-#resizer {
-    position: absolute;
-    top: 0;
-    right: 0;
-    width: 6px;
+
+/* ========== RESIZER (финальная версия) ========== */
+#app {
+    display: flex;
     height: 100vh;
-    cursor: col-resize;
-    z-index: 1000;
-    background: transparent;
+    width: 100vw;
+    overflow: hidden;
 }
 
-#resizer:hover, #resizer.active {
-    background: rgba(102, 126, 234, 0.3);
+#map {
+    flex: 1;
+    height: 100vh;
+    position: relative;
+    min-width: 200px;
+}
+
+#resizer {
+    width: 8px;
+    height: 100vh;
+    cursor: col-resize;
+    background: rgba(102, 126, 234, 0.15);
+    position: relative;
+    flex-shrink: 0;
+    z-index: 1000;
+    transition: background 0.2s;
+}
+
+#resizer:hover,
+#resizer.active {
+    background: rgba(102, 126, 234, 0.6);
 }
 
 .resizer-handle {
@@ -287,28 +293,35 @@ body {
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    width: 2px;
-    height: 40px;
-    background: rgba(255, 255, 255, 0.4);
-    border-radius: 2px;
-    transition: background 0.2s;
-}
-
-#resizer:hover .resizer-handle, #resizer.active .resizer-handle {
-    background: #667eea;
+    width: 4px;
     height: 60px;
+    background: rgba(255, 255, 255, 0.6);
+    border-radius: 4px;
+    pointer-events: none;
+    transition: all 0.2s;
+    box-shadow: 0 0 8px rgba(0, 0, 0, 0.3);
 }
 
-/* Чтобы resizer был поверх всего */
-#resizer {
-    pointer-events: auto;
+#resizer:hover .resizer-handle,
+#resizer.active .resizer-handle {
+    background: #ffffff;
+    height: 90px;
+    width: 5px;
 }
 
 #chat-panel {
-    position: relative;
-    transition: width 0.1s ease;
+    width: 380px;
+    min-width: 380px;
+    max-width: 760px;
+    height: 100vh;
+    background: rgba(22, 22, 40, 0.97);
+    backdrop-filter: blur(20px);
+    border-left: 1px solid rgba(255, 255, 255, 0.08);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    flex-shrink: 0;
 }
-
 
 #report-charts {
     display: flex;
