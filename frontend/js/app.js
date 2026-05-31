@@ -63,14 +63,12 @@ async function socialLogin(provider) {
     }
 }
 // ========== ПРЯМАЯ АВТОРИЗАЦИЯ (ЯНДЕКС & MAIL.RU) ==========
-// ========== ПРЯМАЯ АВТОРИЗАЦИЯ (ЯНДЕКС & MAIL.RU) ==========
 const YANDEX_CLIENT_ID = "00a282071c984f6c8015bdbe0852a5b8";
 const MAILRU_CLIENT_ID = "019e459104e27d97893914d68e0920e4";
 
 function loginYandexDirect() {
     const redirectUri = window.location.origin + "/";
     const authUrl = "https://oauth.yandex.ru/authorize?response_type=token&client_id=" + YANDEX_CLIENT_ID + "&redirect_uri=" + encodeURIComponent(redirectUri) + "&state=yandex";
-    console.log("Yandex auth URL:", authUrl); // ДЛЯ ОТЛАДКИ
     window.location.href = authUrl;
 }
 
@@ -81,38 +79,23 @@ function loginMailruDirect() {
     window.location.href = authUrl;
 }
 
-// Обработчик возврата от провайдеров (ПРОВЕРЯЕТ ХЭШ КАЖДЫЕ 500мс)
-let oauthCheckInterval = null;
-
-// Обработчик возврата от провайдеров
-// Обработчик возврата от провайдеров (ПРОВЕРЯЕТ ХЭШ КАЖДЫЕ 500мс)
-let oauthCheckInterval = null;
-
-(function handleOAuthCallbacks() {
+// Единый обработчик возврата от провайдеров
+function processOAuthCallback() {
     const searchParams = new URLSearchParams(window.location.search);
     const hashParams = new URLSearchParams(window.location.hash.substring(1));
 
-    // Mail.ru возвращает code в query string (response_type=code)
+    // Mail.ru (code в search)
     const code = searchParams.get("code");
     const error = searchParams.get("error");
-    const state = searchParams.get("state") || hashParams.get("state");
 
     if (error) {
         showAuthError("Ошибка авторизации: " + error);
-        window.location.search = "";
+        window.history.replaceState({}, document.title, window.location.pathname);
         return;
     }
 
-    if (code && state === "mailru") {
-        // Останавливаем проверку
-        if (oauthCheckInterval) {
-            clearInterval(oauthCheckInterval);
-            oauthCheckInterval = null;
-        }
-
-        // Очищаем параметры
-        window.location.search = "";
-
+    if (code && searchParams.get("state") === "mailru") {
+        window.history.replaceState({}, document.title, window.location.pathname);
         showAuthError("Входим через Mail.ru...");
         fetch("/api/auth/mailru", {
             method: "POST",
@@ -123,76 +106,43 @@ let oauthCheckInterval = null;
         .then(data => {
             if (data.email && data.temp_password) {
                 return supabaseClient.auth.signInWithPassword({
-                    email: data.email,
-                    password: data.temp_password
+                    email: data.email, password: data.temp_password
                 });
-            } else {
-                showAuthError("Ошибка: " + (data.detail || "неизвестная"));
-            }
+            } else { showAuthError("Ошибка: " + (data.detail || "неизвестная")); }
         })
-        .then(() => {
-            window.location.reload();
-        })
-        .catch(e => {
-            console.error("Auth error:", e);
-            showAuthError("Ошибка входа");
-        });
-        return; // Выходим, чтобы не обрабатывать Яндекс
+        .then(() => window.location.reload())
+        .catch(e => { console.error(e); showAuthError("Ошибка входа"); });
+        return;
     }
 
-    // Яндекс (response_type=token) - остаётся как было
-    const hash = window.location.hash;
-    if (hash && hash.includes("access_token=")) {
-        const params = new URLSearchParams(hash.substring(1));
-        const accessToken = params.get("access_token");
-        const provider = params.get("state"); // 'yandex' или 'mailru'
+    // Яндекс (token в hash)
+    const accessToken = hashParams.get("access_token");
+    const provider = hashParams.get("state");
 
-        if (accessToken && provider) {
-            if (oauthCheckInterval) {
-                clearInterval(oauthCheckInterval);
-                oauthCheckInterval = null;
-            }
-            window.location.hash = "";
-            showAuthError("Входим через " + provider + "...");
-            fetch("/api/auth/" + provider, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ access_token: accessToken })
-            })
-            .then(r => r.json())
-            .then(data => {
-                if (data.email && data.temp_password) {
-                    return supabaseClient.auth.signInWithPassword({
-                        email: data.email,
-                        password: data.temp_password
-                    });
-                } else {
-                    showAuthError("Ошибка: " + (data.detail || "неизвестная"));
-                }
-            })
-            .then(() => {
-                window.location.reload();
-            })
-            .catch(e => {
-                console.error("Auth error:", e);
-                showAuthError("Ошибка входа");
-            });
-        }
+    if (accessToken && provider === "yandex") {
+        window.location.hash = "";
+        showAuthError("Входим через Яндекс...");
+        fetch("/api/auth/yandex", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ access_token: accessToken })
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.email && data.temp_password) {
+                return supabaseClient.auth.signInWithPassword({
+                    email: data.email, password: data.temp_password
+                });
+            } else { showAuthError("Ошибка: " + (data.detail || "неизвестная")); }
+        })
+        .then(() => window.location.reload())
+        .catch(e => { console.error(e); showAuthError("Ошибка входа"); });
     }
-})();
-
-// Запускаем проверку каждые 500мс (на случай если хэш появился позже)
-function startOAuthChecker() {
-    if (oauthCheckInterval) return; // Уже запущен
-    oauthCheckInterval = setInterval(checkOAuthCallback, 500);
-    checkOAuthCallback(); // Первая проверка сразу
 }
 
-// Запускаем при загрузке
-startOAuthChecker();
-
-// Также проверяем при каждом изменении хэша
-window.addEventListener("hashchange", checkOAuthCallback);
+// Запускаем обработчик сразу
+processOAuthCallback();
+window.addEventListener("hashchange", processOAuthCallback);
 
 async function emailSignIn() {
     const email = document.getElementById("auth-email").value.trim();
