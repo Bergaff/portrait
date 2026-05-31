@@ -215,7 +215,6 @@ let state = {
     pieChart:null, barChart:null, radarChart:null,
     activeFilter:null, reportCache:null, chatBusy:false
 };
-
 // ========== RESIZER ЧАТА ==========
 let isResizing = false;
 const resizer = document.getElementById("resizer");
@@ -233,9 +232,13 @@ document.addEventListener("mousemove", (e) => {
     if (!isResizing) return;
     const appWidth = document.getElementById("app").offsetWidth;
     let newWidth = appWidth - e.clientX;
-    newWidth = Math.max(380, Math.min(760, newWidth)); // от 380 до 760px
+    newWidth = Math.max(380, Math.min(760, newWidth));
     chatPanel.style.width = newWidth + "px";
     chatPanel.style.minWidth = newWidth + "px";
+    // Обновляем размер карты (важно для Leaflet)
+    if (window.map && window.map.invalidateSize) {
+        window.map.invalidateSize();
+    }
 });
 
 document.addEventListener("mouseup", () => {
@@ -244,14 +247,20 @@ document.addEventListener("mouseup", () => {
         document.body.style.cursor = "";
         document.body.style.userSelect = "";
         resizer.classList.remove("active");
+        // Финальный пересчёт карты
+        if (window.map && window.map.invalidateSize) {
+            window.map.invalidateSize();
+        }
     }
 });
+
 
 // ========== КАРТА ==========
 const map = L.map("map").setView([55.7558, 37.6173], 13);
 L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
     attribution: "OpenStreetMap, CARTO", maxZoom: 19
 }).addTo(map);
+window.map = map;
 const drawnItems = new L.FeatureGroup();
 map.addLayer(drawnItems);
 const drawControl = new L.Control.Draw({
