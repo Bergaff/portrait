@@ -79,12 +79,10 @@ function loginMailruDirect() {
     window.location.href = authUrl;
 }
 
-// Единый обработчик возврата от провайдеров
 function processOAuthCallback() {
     const searchParams = new URLSearchParams(window.location.search);
     const hashParams = new URLSearchParams(window.location.hash.substring(1));
 
-    // Mail.ru (code в search)
     const code = searchParams.get("code");
     const error = searchParams.get("error");
 
@@ -115,7 +113,6 @@ function processOAuthCallback() {
         return;
     }
 
-    // Яндекс (token в hash)
     const accessToken = hashParams.get("access_token");
     const provider = hashParams.get("state");
 
@@ -140,7 +137,6 @@ function processOAuthCallback() {
     }
 }
 
-// Запускаем обработчик сразу
 processOAuthCallback();
 window.addEventListener("hashchange", processOAuthCallback);
 
