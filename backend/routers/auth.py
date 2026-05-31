@@ -91,10 +91,10 @@ async def mailru_auth(req: AuthRequest):
 
     # Если пришёл код (authorization code flow)
     if req.access_token.startswith("code_"):
-        # Обмениваем код на токен
         code = req.access_token.replace("code_", "")
+        # НОВЫЙ endpoint для обмена кода на токен
         token_resp = requests.post(
-            "https://connect.mail.ru/oauth/token",
+            "https://oauth.mail.ru/token",
             data={
                 "grant_type": "authorization_code",
                 "code": code,
@@ -102,34 +102,26 @@ async def mailru_auth(req: AuthRequest):
                 "client_secret": MAILRU_CLIENT_SECRET,
                 "redirect_uri": "https://portrait-production-20c1.up.railway.app/"
             },
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
             timeout=10
         )
         if token_resp.status_code != 200:
-            raise HTTPException(status_code=400, detail="Mail.ru token exchange failed")
+            raise HTTPException(status_code=400, detail="Mail.ru token exchange failed: " + token_resp.text)
         access_token = token_resp.json().get("access_token")
     else:
-        access_token = req.access_token  # Если всё же пришёл токен (на всякий случай)
+        access_token = req.access_token
 
-    # Далее как было: получаем данные пользователя
-    params = {
-        "method": "users.getInfo",
-        "app_id": MAILRU_CLIENT_ID,
-        "session_key": access_token,
-        "secure": "1"
-    }
-    sorted_keys = sorted(params.keys())
-    sig_str = "".join([k + "=" + params[k] for k in sorted_keys]) + MAILRU_CLIENT_SECRET
-    params["sig"] = hashlib.md5(sig_str.encode()).hexdigest()
-
-    r = requests.get("https://www.appsmail.ru/platform/api", params=params, timeout=10)
-    if r.status_code != 200:
-        raise HTTPException(status_code=400, detail="Mail.ru API error")
-    data = r.json()
-    if not isinstance(data, list) or len(data) == 0:
-        raise HTTPException(status_code=400, detail="Empty Mail.ru response")
-
-    user = data[0]
-    uid = str(user.get("uid", ""))
+    # НОВЫЙ способ получения данных пользователя через userinfo endpoint
+    userinfo_resp = requests.get(
+        "https://oauth.mail.ru/userinfo",
+        params={"access_token": access_token},
+        timeout=10
+    )
+    if userinfo_resp.status_code != 200:
+        raise HTTPException(status_code=400, detail="Mail.ru userinfo failed: " + userinfo_resp.text)
+    
+    user = userinfo_resp.json()
+    uid = str(user.get("id", ""))
     email = user.get("email") or f"mailru_{uid}@placeholder.local"
 
     return create_or_login_supabase(
