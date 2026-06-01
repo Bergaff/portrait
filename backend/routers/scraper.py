@@ -14,7 +14,6 @@ class ScrapeRequest(BaseModel):
     max_results: int = 100
     include_reviews: bool = False
 
-# Маппинг твоих категорий на поисковые запросы (на русском - лучше работает)
 CATEGORY_QUERIES = {
     "Еда": ["рестораны", "кафе", "пиццерии"],
     "Здоровье": ["аптеки", "клиники", "стоматологии"],
@@ -31,19 +30,15 @@ CATEGORY_QUERIES = {
 @router.post("/scrape/start")
 async def start_scrape(req: ScrapeRequest):
     if not APIFY_TOKEN:
-        raise HTTPException(status_code=500, detail="APIFY_TOKEN не настроен в Railway")
+        raise HTTPException(status_code=500, detail="APIFY_TOKEN не настроен")
 
-    # Парсим bbox: south,west,north,east
     parts = [float(x) for x in req.bbox.split(",")]
     south, west, north, east = parts
     center_lat = (south + north) / 2
     center_lon = (west + east) / 2
-
-    # Рассчитываем viewport span (грубо)
     span_lat = abs(north - south)
     span_lng = abs(east - west)
 
-    # Формируем поисковые запросы из выбранных категорий
     queries = []
     for cat in req.categories:
         if cat in CATEGORY_QUERIES:
@@ -52,20 +47,18 @@ async def start_scrape(req: ScrapeRequest):
     if not queries:
         raise HTTPException(status_code=400, detail="Не выбрано ни одной категории")
 
-    # Ограничиваем количество запросов (каждый запрос = деньги)
-    queries = queries[:8]  # максимум 8 запросов
+    queries = queries[:8]  # лимит
 
-    # Формируем input для актора (на основе твоего описания)
     actor_input = {
-    "searchStringsArray": queries,
-    "maxItems": min(req.max_results, 100),
-    "language": "ru",
-    "includeReviews": bool(req.include_reviews),
-    "maxPhotosPerPlace": 0,
-    "maxPostsPerPlace": 0,
-    "coordinates": f"{center_lat},{center_lon}",
-    "viewportSpan": f"{span_lat},{span_lng}"
-}
+        "searchStringsArray": queries,
+        "maxItems": min(req.max_results, 100),
+        "language": "ru",
+        "includeReviews": bool(req.include_reviews),
+        "maxPhotosPerPlace": 0,
+        "maxPostsPerPlace": 0,
+        "coordinates": f"{center_lat},{center_lon}",      # ← важно: строка
+        "viewportSpan": f"{span_lat},{span_lng}"          # ← важно: строка
+    }
 
     try:
         response = requests.post(
@@ -78,7 +71,10 @@ async def start_scrape(req: ScrapeRequest):
         raise HTTPException(status_code=500, detail=f"Connection error: {str(e)[:100]}")
 
     if response.status_code not in (200, 201):
-        raise HTTPException(status_code=500, detail=f"Apify error {response.status_code}: {response.text[:200]}")
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Apify error {response.status_code}: {response.text[:300]}"
+        )
 
     run_data = response.json().get("data", {})
     return {
@@ -87,8 +83,10 @@ async def start_scrape(req: ScrapeRequest):
         "dataset_id": run_data.get("defaultDatasetId")
     }
 
+# Остальные эндпоинты (/status и /abort) оставляем без изменений
 @router.get("/scrape/status/{run_id}")
 async def check_status(run_id: str):
+    # ... (твой текущий код)
     if not APIFY_TOKEN:
         raise HTTPException(status_code=500, detail="APIFY_TOKEN не настроен")
 
@@ -115,7 +113,6 @@ async def check_status(run_id: str):
         "finished_at": data.get("finishedAt")
     }
 
-    # Если успешно — забираем результаты
     if status == "SUCCEEDED" and dataset_id:
         try:
             items_resp = requests.get(
@@ -125,7 +122,6 @@ async def check_status(run_id: str):
             )
             if items_resp.status_code == 200:
                 items = items_resp.json()
-                # Агрегируем (БЕЗ хранения сырых отзывов!)
                 aggregated = []
                 for item in items:
                     aggregated.append({
@@ -137,7 +133,6 @@ async def check_status(run_id: str):
                         "phone": item.get("phone", ""),
                         "url": item.get("url", "")
                     })
-                # Фильтруем мусор - оставляем только с названием
                 aggregated = [x for x in aggregated if x["name"]]
                 result["data"] = aggregated
                 result["total"] = len(aggregated)
