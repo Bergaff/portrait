@@ -56,23 +56,22 @@ async def start_scrape(req: ScrapeRequest):
     queries = queries[:8]  # максимум 8 запросов
 
     # Формируем input для актора (на основе твоего описания)
-    actor_input = {
-        "searchStringsArray": queries,
-        "maxItems": min(req.max_results, 100),  # жёсткий лимит 100
-        "language": "ru",
-        "includeReviews": bool(req.include_reviews),
-        "maxPhotosPerPlace": 0,
-        "maxPostsPerPlace": 0,
-        # Precise area через координаты
-        "coordinates": {
-            "lat": center_lat,
-            "lng": center_lon
-        },
-        "viewportSpan": {
-            "lat": span_lat,
-            "lng": span_lng
-        }
+actor_input = {
+    "searchStringsArray": queries,
+    "maxItems": min(req.max_results, 100),
+    "language": "ru",
+    "includeReviews": bool(req.include_reviews),
+    "maxPhotosPerPlace": 0,
+    "maxPostsPerPlace": 0,
+    "coordinates": {
+        "lat": center_lat,
+        "lng": center_lon
+    },
+    "viewportSpan": {
+        "lat": span_lat,
+        "lng": span_lng
     }
+}
 
     try:
         response = requests.post(
