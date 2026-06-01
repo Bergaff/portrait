@@ -1,6 +1,6 @@
 // ========== SUPABASE ==========
 // ========== ВЕРСИЯ ==========
-const APP_VERSION = "0.026";
+const APP_VERSION = "0.027";
 
 // ========== SUPABASE ==========
 const { createClient } = supabase;
