@@ -56,7 +56,7 @@ async def start_scrape(req: ScrapeRequest):
     queries = queries[:8]  # максимум 8 запросов
 
     # Формируем input для актора (на основе твоего описания)
-actor_input = {
+    actor_input = {
     "searchStringsArray": queries,
     "maxItems": min(req.max_results, 100),
     "language": "ru",
