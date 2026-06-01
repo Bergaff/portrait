@@ -119,7 +119,7 @@ async def mailru_auth(req: AuthRequest):
     )
     if userinfo_resp.status_code != 200:
         raise HTTPException(status_code=400, detail="Mail.ru userinfo failed: " + userinfo_resp.text)
-    
+
     user = userinfo_resp.json()
     uid = str(user.get("id", ""))
     email = user.get("email") or f"mailru_{uid}@placeholder.local"
