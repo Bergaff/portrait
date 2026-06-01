@@ -63,14 +63,8 @@ actor_input = {
     "includeReviews": bool(req.include_reviews),
     "maxPhotosPerPlace": 0,
     "maxPostsPerPlace": 0,
-    "coordinates": {
-        "lat": center_lat,
-        "lng": center_lon
-    },
-    "viewportSpan": {
-        "lat": span_lat,
-        "lng": span_lng
-    }
+    "coordinates": f"{center_lat},{center_lon}",
+    "viewportSpan": f"{span_lat},{span_lng}"
 }
 
     try:
