@@ -15,16 +15,16 @@ class ScrapeRequest(BaseModel):
     include_reviews: bool = False
 
 CATEGORY_QUERIES = {
-    "Еда": ["рестораны", "кафе", "пиццерии"],
-    "Здоровье": ["аптеки", "клиники", "стоматологии"],
+    "Еда": ["рестораны", "кафе", "пиццерии", "кофейни"],
+    "Здоровье": ["аптеки", "клиники", "стоматологии", "медицинские центры"],
     "Шопинг": ["магазины одежды", "супермаркеты", "торговые центры"],
-    "Красота": ["салоны красоты", "парикмахерские", "барбершопы"],
+    "Красота": ["салоны красоты", "парикмахерские", "барбершопы", "ногти"],
     "Спорт": ["фитнес", "тренажерные залы", "бассейны"],
-    "Образование": ["школы", "детские сады", "репетиторы"],
-    "Досуг": ["кинотеатры", "театры", "парки развлечений"],
-    "Авто": ["автосервисы", "автомойки", "шиномонтаж"],
+    "Образование": ["школы", "детские сады"],
+    "Досуг": ["кинотеатры", "театры", "парки"],
+    "Авто": ["автосервисы", "автомойки"],
     "Финансы": ["банки", "банкоматы"],
-    "Услуги": ["химчистки", "ремонт обуви", "почта"]
+    "Услуги": ["химчистки", "почта"]
 }
 
 @router.post("/scrape/start")
@@ -32,12 +32,12 @@ async def start_scrape(req: ScrapeRequest):
     if not APIFY_TOKEN:
         raise HTTPException(status_code=500, detail="APIFY_TOKEN не настроен")
 
-    # Парсим bbox
     parts = [float(x) for x in req.bbox.split(",")]
     south, west, north, east = parts
     center_lat = (south + north) / 2
     center_lon = (west + east) / 2
 
+    # Собираем запросы
     queries = []
     for cat in req.categories:
         if cat in CATEGORY_QUERIES:
@@ -46,23 +46,17 @@ async def start_scrape(req: ScrapeRequest):
     if not queries:
         raise HTTPException(status_code=400, detail="Не выбрано ни одной категории")
 
-    queries = queries[:8]  # экономим токены
+    queries = queries[:6]  # уменьшили, чтобы не тратить слишком много
 
     actor_input = {
         "searchStringsArray": queries,
-        "maxItems": min(req.max_results, 100),
+        "maxItems": min(req.max_results, 80),
         "language": "ru",
         "includeReviews": bool(req.include_reviews),
         "maxPhotosPerPlace": 0,
         "maxPostsPerPlace": 0,
-        "coordinates": {          # ← Объект!
-            "lat": center_lat,
-            "lng": center_lon
-        },
-        "viewportSpan": {         # ← Объект!
-            "lat": abs(north - south),
-            "lng": abs(east - west)
-        }
+        "coordinates": f"{center_lat},{center_lon}",   # ← Строка!
+        "viewportSpan": f"{abs(north-south)},{abs(east-west)}"  # ← Строка!
     }
 
     try:
@@ -70,92 +64,80 @@ async def start_scrape(req: ScrapeRequest):
             f"https://api.apify.com/v2/acts/{ACTOR_ID}/runs",
             params={"token": APIFY_TOKEN},
             json=actor_input,
-            timeout=25
+            timeout=30
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Connection error: {str(e)[:150]}")
 
     if response.status_code not in (200, 201):
-        error_detail = response.text[:400]
+        detail = response.text[:500]
         raise HTTPException(
-            status_code=500,
-            detail=f"Apify error {response.status_code}: {error_detail}"
+            status_code=500, 
+            detail=f"Apify error {response.status_code}: {detail}"
         )
 
     run_data = response.json().get("data", {})
     return {
         "run_id": run_data.get("id"),
-        "status": run_data.get("status"),
+        "status": run_data.get("status", "UNKNOWN"),
         "dataset_id": run_data.get("defaultDatasetId")
     }
 
 
+# === Остальные эндпоинты (status и abort) ===
 @router.get("/scrape/status/{run_id}")
 async def check_status(run_id: str):
     if not APIFY_TOKEN:
         raise HTTPException(status_code=500, detail="APIFY_TOKEN не настроен")
 
     try:
-        response = requests.get(
+        resp = requests.get(
             f"https://api.apify.com/v2/actor-runs/{run_id}",
             params={"token": APIFY_TOKEN},
             timeout=15
         )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Connection error: {str(e)[:100]}")
+        data = resp.json().get("data", {})
+        
+        result = {
+            "status": data.get("status"),
+            "run_id": run_id,
+            "started_at": data.get("startedAt"),
+            "finished_at": data.get("finishedAt")
+        }
 
-    if response.status_code != 200:
-        raise HTTPException(status_code=500, detail=f"Status check failed: {response.text[:200]}")
-
-    data = response.json().get("data", {})
-    status = data.get("status")
-    dataset_id = data.get("defaultDatasetId")
-
-    result = {
-        "status": status,
-        "run_id": run_id,
-        "started_at": data.get("startedAt"),
-        "finished_at": data.get("finishedAt")
-    }
-
-    if status == "SUCCEEDED" and dataset_id:
-        try:
+        if data.get("status") == "SUCCEEDED" and data.get("defaultDatasetId"):
             items_resp = requests.get(
-                f"https://api.apify.com/v2/datasets/{dataset_id}/items",
-                params={"token": APIFY_TOKEN, "format": "json", "limit": 200},
+                f"https://api.apify.com/v2/datasets/{data['defaultDatasetId']}/items",
+                params={"token": APIFY_TOKEN, "format": "json", "limit": 150},
                 timeout=30
             )
             if items_resp.status_code == 200:
                 items = items_resp.json()
-                aggregated = []
-                for item in items:
-                    aggregated.append({
-                        "name": item.get("title", item.get("name", "")),
-                        "category": item.get("categoryName", item.get("category", "")),
-                        "rating": item.get("totalScore", item.get("rating", 0)),
-                        "reviews_count": item.get("reviewsCount", 0),
-                        "address": item.get("address", "")[:100],
-                        "phone": item.get("phone", ""),
-                        "url": item.get("url", "")
-                    })
-                aggregated = [x for x in aggregated if x.get("name")]
+                aggregated = [({
+                    "name": item.get("title") or item.get("name", ""),
+                    "category": item.get("categoryName") or item.get("category", ""),
+                    "rating": item.get("totalScore") or item.get("rating", 0),
+                    "reviews_count": item.get("reviewsCount") or 0,
+                    "address": str(item.get("address", ""))[:100]
+                }) for item in items if item.get("title") or item.get("name")]
+                
                 result["data"] = aggregated
                 result["total"] = len(aggregated)
-        except Exception as e:
-            result["error"] = f"Failed to fetch items: {str(e)[:100]}"
 
-    return result
+        return result
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)[:200])
 
 
 @router.post("/scrape/abort/{run_id}")
 async def abort_run(run_id: str):
     if not APIFY_TOKEN:
-        raise HTTPException(status_code=500, detail="APIFY_TOKEN не настроен")
+        return {"status": "error"}
     try:
         requests.post(
             f"https://api.apify.com/v2/actor-runs/{run_id}/abort",
-            params={"token": APIFY_TOKEN},
-            timeout=10
+            params={"token": APIFY_TOKEN}
         )
         return {"status": "aborted"}
     except:
