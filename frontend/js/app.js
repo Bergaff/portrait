@@ -1,6 +1,6 @@
 // ========== SUPABASE ==========
 // ========== ВЕРСИЯ ==========
-const APP_VERSION = "0.025";
+const APP_VERSION = "0.026";
 
 // ========== SUPABASE ==========
 const { createClient } = supabase;
@@ -68,8 +68,8 @@ const MAILRU_CLIENT_ID = "019e459104e27d97893914d68e0920e4";
 
 function loginYandexDirect() {
     const redirectUri = window.location.origin + "/";
-    const authUrl = "https://oauth.yandex.ru/authorize?response_type=token&client_id=" + YANDEX_CLIENT_ID + 
-        "&redirect_uri=" + encodeURIComponent(redirectUri) + 
+    const authUrl = "https://oauth.yandex.ru/authorize?response_type=token&client_id=" + YANDEX_CLIENT_ID +
+        "&redirect_uri=" + encodeURIComponent(redirectUri) +
         "&state=yandex" +
         "&force_confirm=yes";  // ← добавили
     window.location.href = authUrl;
@@ -216,7 +216,8 @@ let state = {
     bbox:null, organizations:[], scores:{}, categories:{}, orgText:"",
     chatHistory:[], heatLayer:null, markersLayer:null,
     pieChart:null, barChart:null, radarChart:null,
-    activeFilter:null, reportCache:null, chatBusy:false
+    activeFilter:null, reportCache:null, chatBusy:false,
+    scrapedData: [], scrapeRunId: null
 };
 // ========== RESIZER ЧАТА ==========
 let isResizing = false;
@@ -426,6 +427,7 @@ async function analyzeArea() {
     const btn = document.getElementById("analyze-btn");
     btn.disabled=true; btn.textContent="Анализируем...";
     state.reportCache=null; trackRequest();
+    state.scrapedData=[]; state.scrapeRunId=null;
     try {
         const r = await fetch("/api/analyze",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({bbox:state.bbox})});
         const data = await r.json();
@@ -440,10 +442,117 @@ async function analyzeArea() {
         addBotMessage("✅ Индекс: "+data.scores.overall+"/100\nНайдено "+data.scores.total_places+" мест\n\n🎯 Кликайте по категориям слева для фильтра");
         document.getElementById("report-btn").style.display="block";
         document.getElementById("quick-questions").style.display="flex";
+        document.getElementById("scrape-btn").style.display="block";
     } catch(e) { addBotMessage("❌ "+e.message); }
     finally { btn.disabled=false; btn.textContent="Анализировать район"; }
 }
+// ========== APIFY СКРАПЕР ==========
+let scrapingPollInterval = null;
 
+function openScrapeModal() {
+    if (!state.bbox) {
+        addBotMessage("⚠️ Сначала выделите область на карте");
+        return;
+    }
+
+    const cats = ["Еда", "Здоровье", "Шопинг", "Красота", "Спорт", "Образование", "Досуг", "Авто", "Финансы", "Услуги"];
+    let html = '<button class="report-close" onclick="closeScrapeModal()" style="position:absolute;top:16px;right:16px;">&#10005;</button>';
+    html += '<h2 style="color:#fff;margin-bottom:8px">📊 Расширенный анализ</h2>';
+    html += '<p style="color:#888;font-size:13px;margin-bottom:16px">Загрузка реальных рейтингов и количества отзывов с Яндекс.Карт</p>';
+    html += '<div style="text-align:left;background:rgba(255,255,255,0.03);padding:14px;border-radius:10px;margin-bottom:12px">';
+    html += '<h4 style="color:#fff;font-size:13px;margin-bottom:10px">Выберите категории:</h4>';
+    cats.forEach((c, i) => {
+        html += '<label style="display:flex;align-items:center;color:#ccc;padding:5px 0;cursor:pointer;font-size:13px">';
+        html += '<input type="checkbox" name="scrape-cat" value="' + c + '" ' + (i < 3 ? 'checked' : '') + ' style="margin-right:10px;cursor:pointer"> ' + c;
+        html += '</label>';
+    });
+    html += '</div>';
+    html += '<div style="background:rgba(255,193,7,0.1);border-left:3px solid #FFC107;padding:10px;border-radius:6px;margin-bottom:12px;text-align:left">';
+    html += '<p style="color:#FFC107;font-size:12px;margin:0">⏱ Анализ займёт 1-5 минут. Результаты добавятся в полный отчёт.</p>';
+    html += '</div>';
+    html += '<button class="btn-primary" style="width:100%;margin:0" onclick="startScraping()">🚀 Запустить</button>';
+
+    const modal = document.getElementById("profile-modal");
+    document.getElementById("profile-content").innerHTML = html;
+    modal.style.display = "flex";
+}
+
+function closeScrapeModal() {
+    document.getElementById("profile-modal").style.display = "none";
+}
+
+async function startScraping() {
+    const checked = Array.from(document.querySelectorAll('input[name="scrape-cat"]:checked')).map(x => x.value);
+    if (checked.length === 0) {
+        alert("Выберите хотя бы одну категорию");
+        return;
+    }
+
+    closeScrapeModal();
+    addBotMessage("🔄 Запускаю парсинг Яндекс.Карт по " + checked.length + " категориям...\nЭто займёт 1-5 минут.");
+
+    try {
+        const r = await fetch("/api/scrape/start", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                bbox: state.bbox,
+                categories: checked,
+                max_results: 100,
+                include_reviews: false
+            })
+        });
+        const data = await r.json();
+        if (!data.run_id) {
+            addBotMessage("❌ Ошибка запуска: " + (data.detail || JSON.stringify(data)));
+            return;
+        }
+
+        state.scrapeRunId = data.run_id;
+        addBotMessage("✅ Парсер запущен. Жду результаты...");
+        pollScrapeStatus(data.run_id);
+    } catch (e) {
+        addBotMessage("❌ Ошибка сети: " + e.message);
+    }
+}
+
+function pollScrapeStatus(runId) {
+    let attempts = 0;
+    const maxAttempts = 36; // 6 минут (36 * 10 сек)
+
+    if (scrapingPollInterval) clearInterval(scrapingPollInterval);
+
+    scrapingPollInterval = setInterval(async () => {
+        attempts++;
+        if (attempts > maxAttempts) {
+            clearInterval(scrapingPollInterval);
+            addBotMessage("⏱ Превышено время ожидания. Попробуйте позже.");
+            return;
+        }
+
+        try {
+            const r = await fetch("/api/scrape/status/" + runId);
+            const data = await r.json();
+
+            if (data.status === "SUCCEEDED") {
+                clearInterval(scrapingPollInterval);
+                state.scrapedData = data.data || [];
+                state.reportCache = null; // сброс кеша отчёта
+                addBotMessage("✅ Парсинг завершён!\nНайдено: " + (data.total || 0) + " организаций с рейтингами.\n\n📊 Нажмите «Полный отчёт» — теперь там будут данные с Яндекс.Карт.");
+            } else if (data.status === "FAILED" || data.status === "ABORTED" || data.status === "TIMED-OUT") {
+                clearInterval(scrapingPollInterval);
+                addBotMessage("❌ Парсинг не удался: " + data.status);
+            } else {
+                // RUNNING / READY
+                if (attempts === 3) addBotMessage("⏳ Парсим... (~30 сек)");
+                if (attempts === 12) addBotMessage("⏳ Ещё парсим... (~2 мин)");
+                if (attempts === 24) addBotMessage("⏳ Уже скоро... (~4 мин)");
+            }
+        } catch (e) {
+            console.error("Poll error:", e);
+        }
+    }, 10000);
+}
 // ========== ФИЛЬТРЫ ==========
 const CAT_MAP = {
     "Еда":["cafe","restaurant","fast_food","bar","pub","ice_cream"],
@@ -507,7 +616,7 @@ async function generateReport() {
     if (state.reportCache) { document.getElementById("report-text").innerHTML=markdownToHtml(state.reportCache); renderCharts(); document.getElementById("report-modal").style.display="flex"; return; }
     btn.disabled=true; btn.textContent="Генерируем..."; trackRequest();
     try {
-        const r=await fetch("/api/report",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({org_text:state.orgText,scores:state.scores})});
+        const r=await fetch("/api/report",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({org_text:state.orgText,scores:state.scores,scraped_data:state.scrapedData||[]})});
         if (!r.ok) { addBotMessage("❌ Ошибка "+r.status); return; }
         const data=await r.json();
         if (!data.report) { addBotMessage("❌ Пустой ответ"); return; }
