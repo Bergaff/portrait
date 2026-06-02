@@ -1,6 +1,6 @@
 // ========== SUPABASE ==========
 // ========== ВЕРСИЯ ==========
-const APP_VERSION = "0.0296";
+const APP_VERSION = "0.03";
 
 // ========== SUPABASE ==========
 const { createClient } = supabase;
@@ -217,7 +217,9 @@ let state = {
     chatHistory:[], heatLayer:null, markersLayer:null,
     pieChart:null, barChart:null, radarChart:null,
     activeFilter:null, reportCache:null, chatBusy:false,
-    scrapedData: [], scrapeRunId: null
+    scrapedData: [], scrapeRunId: null,
+    scrapedMarkersLayer: null,    // ← добавь
+    scrapeEnriched: false          // ← добавь
 };
 // ========== RESIZER ЧАТА ==========
 let isResizing = false;
@@ -428,6 +430,10 @@ async function analyzeArea() {
     btn.disabled=true; btn.textContent="Анализируем...";
     state.reportCache=null; trackRequest();
     state.scrapedData=[]; state.scrapeRunId=null;
+    if (state.scrapedMarkersLayer) {
+    map.removeLayer(state.scrapedMarkersLayer);
+    state.scrapedMarkersLayer = null;
+}
     try {
         const r = await fetch("/api/analyze",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({bbox:state.bbox})});
         const data = await r.json();
@@ -458,7 +464,8 @@ function openScrapeModal() {
     const cats = ["Еда", "Здоровье", "Шопинг", "Красота", "Спорт", "Образование", "Досуг", "Авто", "Финансы", "Услуги"];
     let html = '<button class="report-close" onclick="closeScrapeModal()" style="position:absolute;top:16px;right:16px;">&#10005;</button>';
     html += '<h2 style="color:#fff;margin-bottom:8px">📊 Расширенный анализ</h2>';
-    html += '<p style="color:#888;font-size:13px;margin-bottom:16px">Загрузка реальных рейтингов и количества отзывов с Яндекс.Карт</p>';
+    html += '<p style="color:#888;font-size:13px;margin-bottom:16px">Загрузка реальных заведений с рейтингами и отзывами</p>';
+
     html += '<div style="text-align:left;background:rgba(255,255,255,0.03);padding:14px;border-radius:10px;margin-bottom:12px">';
     html += '<h4 style="color:#fff;font-size:13px;margin-bottom:10px">Выберите категории:</h4>';
     cats.forEach((c, i) => {
@@ -467,14 +474,23 @@ function openScrapeModal() {
         html += '</label>';
     });
     html += '</div>';
-    html += '<div style="background:rgba(255,193,7,0.1);border-left:3px solid #FFC107;padding:10px;border-radius:6px;margin-bottom:12px;text-align:left">';
-    html += '<p style="color:#FFC107;font-size:12px;margin:0">⏱ Анализ займёт 1-5 минут. Результаты добавятся в полный отчёт.</p>';
+
+    // Чекбокс для AI-саммари
+    html += '<div style="text-align:left;background:rgba(102,126,234,0.08);border:1px solid rgba(102,126,234,0.3);padding:12px;border-radius:10px;margin-bottom:12px">';
+    html += '<label style="display:flex;align-items:flex-start;color:#fff;cursor:pointer;font-size:13px">';
+    html += '<input type="checkbox" id="enrich-data" style="margin-right:10px;margin-top:3px;cursor:pointer">';
+    html += '<span><b>🤖 AI-анализ отзывов</b><br><span style="color:#aaa;font-size:11px">Краткие саммари отзывов для каждого заведения. Дольше (5-10 мин) и дороже, но отчёт станет намного информативнее.</span></span>';
+    html += '</label>';
     html += '</div>';
+
+    html += '<div style="background:rgba(255,193,7,0.1);border-left:3px solid #FFC107;padding:10px;border-radius:6px;margin-bottom:12px;text-align:left">';
+    html += '<p style="color:#FFC107;font-size:12px;margin:0">⏱ Без AI: 1-3 мин. С AI: 5-10 мин. Результаты добавятся в отчёт.</p>';
+    html += '</div>';
+
     html += '<button class="btn-primary" style="width:100%;margin:0" onclick="startScraping()">🚀 Запустить</button>';
 
-    const modal = document.getElementById("profile-modal");
     document.getElementById("profile-content").innerHTML = html;
-    modal.style.display = "flex";
+    document.getElementById("profile-modal").style.display = "flex";
 }
 
 function closeScrapeModal() {
@@ -488,8 +504,14 @@ async function startScraping() {
         return;
     }
 
+    const enrichEl = document.getElementById("enrich-data");
+    const enrichData = enrichEl ? enrichEl.checked : false;
+
     closeScrapeModal();
-    addBotMessage("🔄 Запускаю парсинг Яндекс.Карт по " + checked.length + " категориям...\nЭто займёт 1-5 минут.");
+    const msg = enrichData
+        ? "🔄 Запускаю расширенный парсинг с AI-анализом отзывов...\nЭто займёт 5-10 минут."
+        : "🔄 Запускаю парсинг Яндекс.Карт...\nЭто займёт 1-3 минуты.";
+    addBotMessage(msg);
 
     try {
         const r = await fetch("/api/scrape/start", {
@@ -498,8 +520,9 @@ async function startScraping() {
             body: JSON.stringify({
                 bbox: state.bbox,
                 categories: checked,
-                max_results: 100,
-                include_reviews: false
+                max_results: enrichData ? 60 : 100,
+                include_reviews: false,
+                enrich_data: enrichData
             })
         });
         const data = await r.json();
@@ -509,6 +532,7 @@ async function startScraping() {
         }
 
         state.scrapeRunId = data.run_id;
+        state.scrapeEnriched = enrichData;
         addBotMessage("✅ Парсер запущен. Жду результаты...");
         pollScrapeStatus(data.run_id);
     } catch (e) {
@@ -518,7 +542,7 @@ async function startScraping() {
 
 function pollScrapeStatus(runId) {
     let attempts = 0;
-    const maxAttempts = 36; // 6 минут (36 * 10 сек)
+    const maxAttempts = state.scrapeEnriched ? 80 : 36;
 
     if (scrapingPollInterval) clearInterval(scrapingPollInterval);
 
@@ -526,7 +550,7 @@ function pollScrapeStatus(runId) {
         attempts++;
         if (attempts > maxAttempts) {
             clearInterval(scrapingPollInterval);
-            addBotMessage("⏱ Превышено время ожидания. Попробуйте позже.");
+            addBotMessage("⏱ Превышено время ожидания");
             return;
         }
 
@@ -537,21 +561,77 @@ function pollScrapeStatus(runId) {
             if (data.status === "SUCCEEDED") {
                 clearInterval(scrapingPollInterval);
                 state.scrapedData = data.data || [];
-                state.reportCache = null; // сброс кеша отчёта
-                addBotMessage("✅ Парсинг завершён!\nНайдено: " + (data.total || 0) + " организаций с рейтингами.\n\n📊 Нажмите «Полный отчёт» — теперь там будут данные с Яндекс.Карт.");
+                state.reportCache = null;
+
+                // Показываем заведения золотыми маркерами на карте
+                renderScrapedMarkers();
+
+                let msg = "✅ Парсинг завершён!\nНайдено: " + (data.total || 0) + " заведений";
+                if (data.with_summary) {
+                    msg += " (с AI-саммари: " + data.with_summary + ")";
+                }
+                msg += ".\n\n📊 Нажмите «Полный отчёт» — там теперь живой разбор района с конкретикой по заведениям.";
+
+                // Показываем топ-3 заведения по рейтингу
+                const top = state.scrapedData
+                    .filter(x => x.rating >= 4.5 && x.reviews_count >= 10)
+                    .sort((a, b) => (b.reviews_count || 0) - (a.reviews_count || 0))
+                    .slice(0, 3);
+                if (top.length > 0) {
+                    msg += "\n\n⭐ Топ заведений района:";
+                    top.forEach(x => {
+                        msg += "\n• " + x.name + " (★" + x.rating + ", " + x.reviews_count + " отз.)";
+                    });
+                }
+
+                addBotMessage(msg);
             } else if (data.status === "FAILED" || data.status === "ABORTED" || data.status === "TIMED-OUT") {
                 clearInterval(scrapingPollInterval);
                 addBotMessage("❌ Парсинг не удался: " + data.status);
             } else {
-                // RUNNING / READY
                 if (attempts === 3) addBotMessage("⏳ Парсим... (~30 сек)");
                 if (attempts === 12) addBotMessage("⏳ Ещё парсим... (~2 мин)");
-                if (attempts === 24) addBotMessage("⏳ Уже скоро... (~4 мин)");
+                if (attempts === 30) addBotMessage("⏳ AI обрабатывает отзывы... (~5 мин)");
+                if (attempts === 60) addBotMessage("⏳ Почти готово...");
             }
         } catch (e) {
             console.error("Poll error:", e);
         }
     }, 10000);
+}
+
+// НОВАЯ ФУНКЦИЯ: маркеры заведений из Apify на карте
+function renderScrapedMarkers() {
+    if (state.scrapedMarkersLayer) map.removeLayer(state.scrapedMarkersLayer);
+    state.scrapedMarkersLayer = L.layerGroup();
+
+    state.scrapedData.forEach(o => {
+        if (!o.lat || !o.lon) return;
+
+        // Цвет маркера по рейтингу
+        let color = "#888";
+        if (o.rating >= 4.5) color = "#4CAF50";       // зелёный — отлично
+        else if (o.rating >= 4.0) color = "#8BC34A";  // светло-зелёный
+        else if (o.rating >= 3.5) color = "#FFC107";  // жёлтый
+        else if (o.rating > 0) color = "#f44336";     // красный — плохо
+
+        // Размер маркера по количеству отзывов
+        const radius = Math.min(12, 4 + Math.log10((o.reviews_count || 1) + 1) * 3);
+
+        let tooltip = "<b>" + o.name + "</b>";
+        if (o.rating) tooltip += "<br>★ " + o.rating + " (" + (o.reviews_count || 0) + " отз.)";
+        if (o.category) tooltip += "<br><i>" + o.category + "</i>";
+
+        L.circleMarker([o.lat, o.lon], {
+            radius: radius,
+            color: "#fff",
+            weight: 2,
+            fillColor: color,
+            fillOpacity: 0.85
+        }).bindTooltip(tooltip, {direction: "top"}).addTo(state.scrapedMarkersLayer);
+    });
+
+    state.scrapedMarkersLayer.addTo(map);
 }
 // ========== ФИЛЬТРЫ ==========
 const CAT_MAP = {
