@@ -28,7 +28,6 @@ CATEGORY_QUERIES = {
 }
 
 def reverse_geocode(lat, lon):
-    """Получаем название города по координатам через Nominatim"""
     try:
         r = requests.get(
             "https://nominatim.openstreetmap.org/reverse",
@@ -60,32 +59,34 @@ async def start_scrape(req: ScrapeRequest):
     span_lat = abs(north - south)
     span_lon = abs(east - west)
 
-    # Определяем город по координатам
     city = reverse_geocode(center_lat, center_lon)
-    location_str = city if city else "Moscow"
+    location_str = city if city else "Москва"
 
-    # Собираем запросы
+    # Запросы С добавлением города (для надежности)
     queries = []
     for cat in req.categories:
         if cat in CATEGORY_QUERIES:
-            queries.extend(CATEGORY_QUERIES[cat])
+            for q in CATEGORY_QUERIES[cat]:
+                queries.append(f"{q} {location_str}")
 
     if not queries:
         raise HTTPException(status_code=400, detail="Не выбрано ни одной категории")
 
     queries = list(dict.fromkeys(queries))[:5]
 
-    # ⚠️ ПРАВИЛЬНЫЕ имена полей (из официальной документации актора)
+    # ⚠️ ТОЛЬКО ПРАВИЛЬНЫЕ поля из официальной документации
+    # coordinates = "LONGITUDE,LATITUDE" (НЕ наоборот!)
     actor_input = {
         "query": queries,
         "location": location_str,
-        "coordinates": f"{center_lon},{center_lat}",  # ⚠️ ВНИМАНИЕ: longitude,latitude (не наоборот!)
-        "viewportSpan": f"{span_lon},{span_lat}",     # ⚠️ ВНИМАНИЕ: dLon,dLat
+        "coordinates": f"{center_lon},{center_lat}",
+        "viewportSpan": f"{span_lon},{span_lat}",
         "maxResults": min(req.max_results, 100),
         "language": "ru",
         "includeReviews": bool(req.include_reviews),
         "maxPhotos": 0,
-        "maxPosts": 0
+        "maxPosts": 0,
+        "enrichBusinessData": False
     }
 
     try:
