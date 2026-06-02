@@ -15,16 +15,16 @@ class ScrapeRequest(BaseModel):
     include_reviews: bool = False
 
 CATEGORY_QUERIES = {
-    "Еда": ["кафе", "рестораны", "пиццерии", "кофейни"],
-    "Здоровье": ["аптеки", "клиники", "стоматологии"],
-    "Шопинг": ["магазины одежды", "супермаркеты"],
-    "Красота": ["салоны красоты", "парикмахерские"],
-    "Спорт": ["фитнес", "тренажерные залы"],
-    "Образование": ["школы", "детские сады"],
-    "Досуг": ["кинотеатры", "парки"],
-    "Авто": ["автосервисы", "автомойки"],
+    "Еда": ["кафе"],
+    "Здоровье": ["аптеки"],
+    "Шопинг": ["магазины"],
+    "Красота": ["салоны красоты"],
+    "Спорт": ["фитнес"],
+    "Образование": ["школы"],
+    "Досуг": ["развлечения"],
+    "Авто": ["автосервисы"],
     "Финансы": ["банки"],
-    "Услуги": ["химчистки", "почта"]
+    "Услуги": ["услуги"]
 }
 
 def reverse_geocode(lat, lon):
@@ -40,11 +40,10 @@ def reverse_geocode(lat, lon):
             data = r.json()
             addr = data.get("address", {})
             city = addr.get("city") or addr.get("town") or addr.get("village") or addr.get("state", "")
-            country = addr.get("country", "")
-            return city, country
+            return city
     except:
         pass
-    return "", ""
+    return ""
 
 @router.post("/scrape/start")
 async def start_scrape(req: ScrapeRequest):
@@ -58,41 +57,35 @@ async def start_scrape(req: ScrapeRequest):
 
     center_lat = (south + north) / 2
     center_lon = (west + east) / 2
-    span_lat = abs(north - south) * 0.9
-    span_lon = abs(east - west) * 0.9
+    span_lat = abs(north - south)
+    span_lon = abs(east - west)
 
     # Определяем город по координатам
-    city, country = reverse_geocode(center_lat, center_lon)
-    location_str = f"{city}, {country}" if city and country else (city or country or "Россия")
+    city = reverse_geocode(center_lat, center_lon)
+    location_str = city if city else "Moscow"
 
-    # Собираем запросы и добавляем город к каждому
+    # Собираем запросы
     queries = []
     for cat in req.categories:
         if cat in CATEGORY_QUERIES:
-            for q in CATEGORY_QUERIES[cat]:
-                # Добавляем город к запросу для надёжности
-                if city:
-                    queries.append(f"{q} {city}")
-                else:
-                    queries.append(q)
+            queries.extend(CATEGORY_QUERIES[cat])
 
     if not queries:
         raise HTTPException(status_code=400, detail="Не выбрано ни одной категории")
 
-    # Уникальные запросы, максимум 5 чтобы не сливать бюджет
     queries = list(dict.fromkeys(queries))[:5]
 
-    # ⚠️ ПРАВИЛЬНЫЕ имена полей для этого актора
+    # ⚠️ ПРАВИЛЬНЫЕ имена полей (из официальной документации актора)
     actor_input = {
-        "searchStringsArray": queries,
-        "locationQuery": location_str,
-        "coordinates": f"{center_lat},{center_lon}",
-        "viewportSpan": f"{span_lat},{span_lon}",
-        "maxItems": min(req.max_results, 100),
+        "query": queries,
+        "location": location_str,
+        "coordinates": f"{center_lon},{center_lat}",  # ⚠️ ВНИМАНИЕ: longitude,latitude (не наоборот!)
+        "viewportSpan": f"{span_lon},{span_lat}",     # ⚠️ ВНИМАНИЕ: dLon,dLat
+        "maxResults": min(req.max_results, 100),
         "language": "ru",
         "includeReviews": bool(req.include_reviews),
-        "maxPhotosPerPlace": 0,
-        "maxPostsPerPlace": 0
+        "maxPhotos": 0,
+        "maxPosts": 0
     }
 
     try:
@@ -154,8 +147,8 @@ async def check_status(run_id: str):
                     aggregated.append({
                         "name": item.get("title") or item.get("name", ""),
                         "category": item.get("categoryName") or item.get("category", ""),
-                        "rating": item.get("totalScore") or item.get("rating", 0),
-                        "reviews_count": item.get("reviewsCount") or item.get("reviewCount", 0),
+                        "rating": item.get("rating") or item.get("totalScore", 0),
+                        "reviews_count": item.get("reviewCount") or item.get("reviewsCount", 0),
                         "address": str(item.get("address", ""))[:150],
                         "lat": item.get("latitude"),
                         "lon": item.get("longitude"),
