@@ -13,6 +13,7 @@ class ScrapeRequest(BaseModel):
     categories: list
     max_results: int = 100
     include_reviews: bool = False
+    enrich_data: bool = False  # AI-саммари отзывов
 
 CATEGORY_QUERIES = {
     "Еда": ["кафе"],
@@ -38,8 +39,7 @@ def reverse_geocode(lat, lon):
         if r.status_code == 200:
             data = r.json()
             addr = data.get("address", {})
-            city = addr.get("city") or addr.get("town") or addr.get("village") or addr.get("state", "")
-            return city
+            return addr.get("city") or addr.get("town") or addr.get("village") or addr.get("state", "")
     except:
         pass
     return ""
@@ -62,7 +62,6 @@ async def start_scrape(req: ScrapeRequest):
     city = reverse_geocode(center_lat, center_lon)
     location_str = city if city else "Москва"
 
-    # Запросы С добавлением города (для надежности)
     queries = []
     for cat in req.categories:
         if cat in CATEGORY_QUERIES:
@@ -74,19 +73,20 @@ async def start_scrape(req: ScrapeRequest):
 
     queries = list(dict.fromkeys(queries))[:5]
 
-    # ⚠️ ТОЛЬКО ПРАВИЛЬНЫЕ поля из официальной документации
-    # coordinates = "LONGITUDE,LATITUDE" (НЕ наоборот!)
+    # Лимит результатов: при enrich урезаем (дороже)
+    safe_limit = 60 if req.enrich_data else 100
+
     actor_input = {
         "query": queries,
         "location": location_str,
         "coordinates": f"{center_lon},{center_lat}",
         "viewportSpan": f"{span_lon},{span_lat}",
-        "maxResults": min(req.max_results, 100),
+        "maxResults": min(req.max_results, safe_limit),
         "language": "ru",
-        "includeReviews": bool(req.include_reviews),
+        "includeReviews": False,  # сами отзывы не нужны, только AI-саммари
         "maxPhotos": 0,
         "maxPosts": 0,
-        "enrichBusinessData": False
+        "enrichBusinessData": bool(req.enrich_data)  # ⭐ ключевая опция
     }
 
     try:
@@ -111,7 +111,7 @@ async def start_scrape(req: ScrapeRequest):
         "status": run_data.get("status", "UNKNOWN"),
         "dataset_id": run_data.get("defaultDatasetId"),
         "detected_city": city,
-        "queries_used": queries
+        "enriched": req.enrich_data
     }
 
 
@@ -145,6 +145,15 @@ async def check_status(run_id: str):
                 items = items_resp.json()
                 aggregated = []
                 for item in items:
+                    # AI-саммари из enrichment (структура может варьироваться)
+                    ai_summary = ""
+                    if isinstance(item.get("aiReviewSummary"), str):
+                        ai_summary = item["aiReviewSummary"][:400]
+                    elif isinstance(item.get("reviewsSummary"), str):
+                        ai_summary = item["reviewsSummary"][:400]
+                    elif isinstance(item.get("summary"), str):
+                        ai_summary = item["summary"][:400]
+
                     aggregated.append({
                         "name": item.get("title") or item.get("name", ""),
                         "category": item.get("categoryName") or item.get("category", ""),
@@ -153,11 +162,14 @@ async def check_status(run_id: str):
                         "address": str(item.get("address", ""))[:150],
                         "lat": item.get("latitude"),
                         "lon": item.get("longitude"),
-                        "url": item.get("url", "")
+                        "url": item.get("url", ""),
+                        "ai_summary": ai_summary,
+                        "sentiment": item.get("sentimentScore", 0)
                     })
                 aggregated = [x for x in aggregated if x["name"]]
                 result["data"] = aggregated
                 result["total"] = len(aggregated)
+                result["with_summary"] = len([x for x in aggregated if x["ai_summary"]])
 
         return result
 
