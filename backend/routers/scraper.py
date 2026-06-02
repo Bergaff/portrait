@@ -32,11 +32,18 @@ async def start_scrape(req: ScrapeRequest):
     if not APIFY_TOKEN:
         raise HTTPException(status_code=500, detail="APIFY_TOKEN не настроен")
 
-    # Парсим bbox
-    parts = [float(x) for x in req.bbox.split(",")]
-    south, west, north, east = parts
+    # === КРИТИЧНОЕ ИСПРАВЛЕНИЕ: правильный bbox ===
+    try:
+        south, west, north, east = [float(x) for x in req.bbox.split(",")]
+    except:
+        raise HTTPException(status_code=400, detail="Неверный формат bbox")
+
     center_lat = (south + north) / 2
     center_lon = (west + east) / 2
+
+    # Делаем область чуть меньше, чтобы не захватывать лишнее
+    span_lat = abs(north - south) * 0.85
+    span_lon = abs(east - west) * 0.85
 
     # Собираем запросы
     queries = []
@@ -47,13 +54,13 @@ async def start_scrape(req: ScrapeRequest):
     if not queries:
         raise HTTPException(status_code=400, detail="Не выбрано ни одной категории")
 
-    queries = list(dict.fromkeys(queries))[:5]  # убираем дубли + лимит
+    queries = list(dict.fromkeys(queries))[:6]   # до 6 запросов
 
     actor_input = {
-        "query": queries,                                   # ← Главное поле!
-        "coordinates": f"{center_lat},{center_lon}",        # ← строка
-        "viewportSpan": f"{abs(north-south)*0.8},{abs(east-west)*0.8}",  # чуть меньше области
-        "maxResults": min(req.max_results, 120),
+        "query": queries,
+        "coordinates": f"{center_lat},{center_lon}",
+        "viewportSpan": f"{span_lat},{span_lon}",
+        "maxResults": min(req.max_results, 150),
         "language": "ru",
         "includeReviews": bool(req.include_reviews),
         "maxPhotosPerPlace": 0,
@@ -73,7 +80,7 @@ async def start_scrape(req: ScrapeRequest):
     if response.status_code not in (200, 201):
         raise HTTPException(
             status_code=500,
-            detail=f"Apify error {response.status_code}: {response.text[:400]}"
+            detail=f"Apify error {response.status_code}: {response.text[:500]}"
         )
 
     run_data = response.json().get("data", {})
@@ -84,7 +91,7 @@ async def start_scrape(req: ScrapeRequest):
     }
 
 
-# === Status endpoint ===
+# === Status (оставляем как было, но улучшили) ===
 @router.get("/scrape/status/{run_id}")
 async def check_status(run_id: str):
     if not APIFY_TOKEN:
@@ -94,7 +101,7 @@ async def check_status(run_id: str):
         resp = requests.get(
             f"https://api.apify.com/v2/actor-runs/{run_id}",
             params={"token": APIFY_TOKEN},
-            timeout=15
+            timeout=20
         )
         data = resp.json().get("data", {})
 
@@ -108,8 +115,8 @@ async def check_status(run_id: str):
         if data.get("status") == "SUCCEEDED" and data.get("defaultDatasetId"):
             items_resp = requests.get(
                 f"https://api.apify.com/v2/datasets/{data['defaultDatasetId']}/items",
-                params={"token": APIFY_TOKEN, "format": "json", "limit": 200},
-                timeout=30
+                params={"token": APIFY_TOKEN, "format": "json", "limit": 300},
+                timeout=40
             )
             if items_resp.status_code == 200:
                 items = items_resp.json()
@@ -120,7 +127,9 @@ async def check_status(run_id: str):
                         "category": item.get("categoryName") or item.get("category", ""),
                         "rating": item.get("totalScore") or item.get("rating", 0),
                         "reviews_count": item.get("reviewsCount") or item.get("reviewCount", 0),
-                        "address": str(item.get("address", ""))[:120],
+                        "address": str(item.get("address", ""))[:150],
+                        "lat": item.get("latitude"),
+                        "lon": item.get("longitude")
                     })
                 aggregated = [x for x in aggregated if x["name"]]
                 result["data"] = aggregated
