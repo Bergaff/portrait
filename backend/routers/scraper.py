@@ -27,44 +27,72 @@ CATEGORY_QUERIES = {
     "Услуги": ["химчистки", "почта"]
 }
 
+def reverse_geocode(lat, lon):
+    """Получаем название города по координатам через Nominatim"""
+    try:
+        r = requests.get(
+            "https://nominatim.openstreetmap.org/reverse",
+            params={"lat": lat, "lon": lon, "format": "json", "accept-language": "ru", "zoom": 10},
+            headers={"User-Agent": "QuarterPortrait/1.0"},
+            timeout=8
+        )
+        if r.status_code == 200:
+            data = r.json()
+            addr = data.get("address", {})
+            city = addr.get("city") or addr.get("town") or addr.get("village") or addr.get("state", "")
+            country = addr.get("country", "")
+            return city, country
+    except:
+        pass
+    return "", ""
+
 @router.post("/scrape/start")
 async def start_scrape(req: ScrapeRequest):
     if not APIFY_TOKEN:
         raise HTTPException(status_code=500, detail="APIFY_TOKEN не настроен")
 
-    # === КРИТИЧНОЕ ИСПРАВЛЕНИЕ: правильный bbox ===
     try:
         south, west, north, east = [float(x) for x in req.bbox.split(",")]
     except:
-        raise HTTPException(status_code=400, detail="Неверный формат bbox")
+        raise HTTPException(status_code=400, detail="Неверный bbox")
 
     center_lat = (south + north) / 2
     center_lon = (west + east) / 2
+    span_lat = abs(north - south) * 0.9
+    span_lon = abs(east - west) * 0.9
 
-    # Делаем область чуть меньше, чтобы не захватывать лишнее
-    span_lat = abs(north - south) * 0.85
-    span_lon = abs(east - west) * 0.85
+    # Определяем город по координатам
+    city, country = reverse_geocode(center_lat, center_lon)
+    location_str = f"{city}, {country}" if city and country else (city or country or "Россия")
 
-    # Собираем запросы
+    # Собираем запросы и добавляем город к каждому
     queries = []
     for cat in req.categories:
         if cat in CATEGORY_QUERIES:
-            queries.extend(CATEGORY_QUERIES[cat])
+            for q in CATEGORY_QUERIES[cat]:
+                # Добавляем город к запросу для надёжности
+                if city:
+                    queries.append(f"{q} {city}")
+                else:
+                    queries.append(q)
 
     if not queries:
         raise HTTPException(status_code=400, detail="Не выбрано ни одной категории")
 
-    queries = list(dict.fromkeys(queries))[:6]   # до 6 запросов
+    # Уникальные запросы, максимум 5 чтобы не сливать бюджет
+    queries = list(dict.fromkeys(queries))[:5]
 
+    # ⚠️ ПРАВИЛЬНЫЕ имена полей для этого актора
     actor_input = {
-        "query": queries,
+        "searchStringsArray": queries,
+        "locationQuery": location_str,
         "coordinates": f"{center_lat},{center_lon}",
         "viewportSpan": f"{span_lat},{span_lon}",
-        "maxResults": min(req.max_results, 150),
+        "maxItems": min(req.max_results, 100),
         "language": "ru",
         "includeReviews": bool(req.include_reviews),
         "maxPhotosPerPlace": 0,
-        "maxPostsPerPlace": 0,
+        "maxPostsPerPlace": 0
     }
 
     try:
@@ -72,7 +100,7 @@ async def start_scrape(req: ScrapeRequest):
             f"https://api.apify.com/v2/acts/{ACTOR_ID}/runs",
             params={"token": APIFY_TOKEN},
             json=actor_input,
-            timeout=30
+            timeout=35
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Connection error: {str(e)[:150]}")
@@ -80,18 +108,19 @@ async def start_scrape(req: ScrapeRequest):
     if response.status_code not in (200, 201):
         raise HTTPException(
             status_code=500,
-            detail=f"Apify error {response.status_code}: {response.text[:500]}"
+            detail=f"Apify error {response.status_code}: {response.text[:600]}"
         )
 
     run_data = response.json().get("data", {})
     return {
         "run_id": run_data.get("id"),
         "status": run_data.get("status", "UNKNOWN"),
-        "dataset_id": run_data.get("defaultDatasetId")
+        "dataset_id": run_data.get("defaultDatasetId"),
+        "detected_city": city,
+        "queries_used": queries
     }
 
 
-# === Status (оставляем как было, но улучшили) ===
 @router.get("/scrape/status/{run_id}")
 async def check_status(run_id: str):
     if not APIFY_TOKEN:
@@ -129,7 +158,8 @@ async def check_status(run_id: str):
                         "reviews_count": item.get("reviewsCount") or item.get("reviewCount", 0),
                         "address": str(item.get("address", ""))[:150],
                         "lat": item.get("latitude"),
-                        "lon": item.get("longitude")
+                        "lon": item.get("longitude"),
+                        "url": item.get("url", "")
                     })
                 aggregated = [x for x in aggregated if x["name"]]
                 result["data"] = aggregated
