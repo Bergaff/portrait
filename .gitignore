@@ -1,0 +1,16 @@
+# Зависимости и сборка
+node_modules
+.next/
+dist
+build
+*.log
+
+# Окружение и секреты
+.env
+.env.local
+.env.production
+.env*.local
+
+# Системные файлы
+.DS_Store
+Thumbs.db
