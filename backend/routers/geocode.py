@@ -1,86 +1,57 @@
-from fastapi import APIRouter
-import requests
+import httpx
+from fastapi import APIRouter, Request
 
 router = APIRouter()
 
-@router.get("/search")
-async def search_address(q: str):
-    """
-    Используем Photon - бесплатный геокодер без блокировок
-    """
-    try:
-        r = requests.get(
-            "https://photon.komoot.io/api/",
-            params={
-                "q": q,
-                "limit": 5,
-                "lang": "ru",
-                "bbox": "19.0,41.0,190.0,82.0"
-            },
-            headers={"User-Agent": "QuarterPortrait/1.0"},
-            timeout=10
-        )
-        if r.status_code == 200:
-            data = r.json()
-            results = []
-            for feature in data.get("features", []):
-                props = feature.get("properties", {})
-                coords = feature.get("geometry", {}).get("coordinates", [0, 0])
-                name = props.get("name", "")
-                city = props.get("city", props.get("county", ""))
-                street = props.get("street", "")
-                country = props.get("country", "")
-                parts = [p for p in [name, street, city, country] if p]
-                display = ", ".join(parts[:3])
-                if display:
-                    results.append({
-                        "display_name": display,
-                        "lat": float(coords[1]),
-                        "lon": float(coords[0])
-                    })
-            return {"results": results}
-    except Exception as e:
-        print("Photon error: " + str(e))
+# Список доверенных внешних гео-баз для определения города по IP
+GEO_PROVIDERS = [
+    "https://ipwho.is/{}",
+    "https://ip-api.com/json/{}",
+    "https://ipapi.co/{}/json/"
+]
 
-    # Резервный вариант - Nominatim
-    try:
-        r2 = requests.get(
-            "https://nominatim.openstreetmap.org/search",
-            params={"q": q, "format": "json", "limit": 5, "accept-language": "ru"},
-            headers={"User-Agent": "QuarterPortrait/1.0/contact@portrait.app"},
-            timeout=8
-        )
-        if r2.status_code == 200:
-            results = []
-            for item in r2.json():
-                results.append({
-                    "display_name": item.get("display_name", "")[:80],
-                    "lat": float(item.get("lat", 0)),
-                    "lon": float(item.get("lon", 0))
-                })
-            return {"results": results}
-    except Exception as e2:
-        print("Nominatim fallback error: " + str(e2))
+@router.get("/detect")
+async def detect_city(request: Request):
+    # Извлечение реального IP пользователя за прокси-сервером Railway
+    forwarded_for = request.headers.get("x-forwarded-for")
+    client_ip = forwarded_for.split(",")[0].strip() if forwarded_for else request.client.host
+    
+    # Дефолтный ответ (безопасный фолбек на случай VPN или отсутствия разрешений)
+    fallback_response = {
+        "status": "fallback",
+        "city": "Москва",
+        "lat": 55.7558,
+        "lng": 37.6173,
+        "note": "Определено по умолчанию или через защищенное соединение"
+    }
 
-    return {"results": []}
+    # Если IP локальный или служебный, сразу отдаем фолбек
+    if client_ip in ("127.0.0.1", "localhost", "0.0.0.0") or client_ip.startswith("10.") or client_ip.startswith("192.168."):
+        return fallback_response
 
-@router.get("/detect-city")
-async def detect_city():
-    providers = [
-        "https://ipapi.co/json/",
-        "https://ip-api.com/json/?fields=city,lat,lon",
-        "https://ipwho.is/"
-    ]
-    for url in providers:
-        try:
-            r = requests.get(url, timeout=5)
-            if r.status_code == 200:
-                data = r.json()
-                city = data.get("city", data.get("City", "Москва"))
-                lat = float(data.get("latitude", data.get("lat", 55.7558)))
-                lon = float(data.get("longitude", data.get("lon", 37.6173)))
-                if lat and lon:
-                    return {"city": city, "lat": lat, "lon": lon}
-        except:
-            continue
-    return {"city": "Москва", "lat": 55.7558, "lon": 37.6173}
+    async with httpx.AsyncClient(timeout=3.0) as client:
+        for provider in GEO_PROVIDERS:
+            try:
+                url = provider.format(client_ip)
+                response = await client.get(url)
+                if response.status_code == 200:
+                    data = response.json()
+                    
+                    # Парсинг ответа в зависимости от структуры провайдера
+                    city = data.get("city") or data.get("city_name")
+                    lat = data.get("lat") or data.get("latitude")
+                    lng = data.get("lon") or data.get("longitude") or data.get("lng")
+                    
+                    # Защита от ложного VPN-позиционирования
+                    if city and lat and lng:
+                        return {
+                            "status": "success",
+                            "city": city,
+                            "lat": float(lat),
+                            "lng": float(lng),
+                            "ip_detected": client_ip
+                        }
+            except Exception:
+                continue # Пробуем следующий провайдер, если текущий недоступен
+                
+    return fallback_response
