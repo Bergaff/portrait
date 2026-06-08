@@ -23,7 +23,7 @@ export function SidebarPanel({ selected }: SidebarPanelProps) {
   const [isChatLoading, setIsChatLoading] = useState(false)
   const [isReportLoading, setIsReportLoading] = useState(false)
   const [reportResult, setReportResult] = useState<string | null>(null)
-  
+
   const chatEndRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -32,7 +32,7 @@ export function SidebarPanel({ selected }: SidebarPanelProps) {
 
   const handleSendMessage = async () => {
     if (!input.trim() || isChatLoading) return
-    
+
     const userText = input.trim()
     setInput("")
     const updatedHistory = [...messages, { role: "user", content: userText }]
@@ -53,7 +53,7 @@ export function SidebarPanel({ selected }: SidebarPanelProps) {
           } : null
         })
       })
-      
+
       if (response.ok) {
         const data = await response.json()
         setMessages([...updatedHistory, { role: "assistant", content: data.response }])
@@ -145,10 +145,10 @@ export function SidebarPanel({ selected }: SidebarPanelProps) {
       <section className="rounded-xl border border-border bg-card p-4 flex flex-col gap-3">
         <div className="flex items-center justify-between">
           <span className="text-xs font-semibold text-foreground uppercase tracking-wider">Commercial Report</span>
-          <Button 
-            variant="outline" 
-            size="sm" 
-            disabled={!selected || isReportLoading} 
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={!selected || isReportLoading}
             onClick={handleGenerateReport}
             className="cursor-pointer"
           >
@@ -168,7 +168,7 @@ export function SidebarPanel({ selected }: SidebarPanelProps) {
           <Sparkles className="size-3.5 text-primary" />
           <span className="text-xs font-semibold text-foreground uppercase tracking-wider">Spatial Copilot</span>
         </div>
-        
+
         <div className="flex-1 overflow-y-auto space-y-2.5 pr-1 text-xs scrollbar-thin">
           {messages.length === 0 && (
             <p className="text-muted-foreground text-[11px] italic pt-2">
