@@ -1,18 +1,20 @@
 import os
 import sys
 
-# Динамически добавляем корень проекта и текущую папку в пути поиска модулей Python
+# Принудительная регистрация путей в системном окружении контейнера
 current_dir = os.path.dirname(os.path.abspath(__file__))
 if current_dir not in sys.path:
     sys.path.insert(0, current_dir)
-    
-parent_dir = os.path.dirname(current_dir)
-if parent_dir not in sys.path:
-    sys.path.insert(0, parent_dir)
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from backend.routers import analyze, report, chat, geocode
+
+# Импортируем роутеры локально. Если Python считает корень рабочей директорией, 
+# он подтянет их через блоки try/except в любом окружении окружения хостинга.
+try:
+    from backend.routers import analyze, report, chat, geocode
+except ModuleNotFoundError:
+    from routers import analyze, report, chat, geocode
 
 app = FastAPI(
     title="Atlas Urban Analytics API",
@@ -20,7 +22,6 @@ app = FastAPI(
     version="2.5"
 )
 
-# Настройка CORS-политик
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -29,6 +30,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Подключение роутеров
 app.include_router(analyze.router, prefix="/api/analyze", tags=["Spatial Analytics"])
 app.include_router(report.router, prefix="/api/report", tags=["Commercial Intelligence"])
 app.include_router(chat.router, prefix="/api/chat", tags=["AI Copilot"])
