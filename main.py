@@ -1,4 +1,15 @@
 import os
+import sys
+
+# Динамически добавляем корень проекта и текущую папку в пути поиска модулей Python
+current_dir = os.path.dirname(os.path.abspath(__file__))
+if current_dir not in sys.path:
+    sys.path.insert(0, current_dir)
+    
+parent_dir = os.path.dirname(current_dir)
+if parent_dir not in sys.path:
+    sys.path.insert(0, parent_dir)
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from backend.routers import analyze, report, chat, geocode
@@ -9,7 +20,7 @@ app = FastAPI(
     version="2.5"
 )
 
-# Настройка CORS-политик для бесшовного общения с фронтендом Next.js
+# Настройка CORS-политик
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -18,7 +29,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Подключение изолированных сервисных роутеров
 app.include_router(analyze.router, prefix="/api/analyze", tags=["Spatial Analytics"])
 app.include_router(report.router, prefix="/api/report", tags=["Commercial Intelligence"])
 app.include_router(chat.router, prefix="/api/chat", tags=["AI Copilot"])
