@@ -1,7 +1,10 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import List, Optional
-from backend.services import nvidia_ai  # Твой рабочий модуль интеграции с LLM
+try:
+    from backend.services import nvidia_ai
+except ModuleNotFoundError:
+    from services import nvidia_ai
 
 router = APIRouter()
 
