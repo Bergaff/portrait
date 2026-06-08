@@ -1,63 +1,60 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 from pydantic import BaseModel
-from typing import List, Optional, Dict
+from services.nvidia_ai import ask_nvidia
 
 router = APIRouter()
 
 class ReportRequest(BaseModel):
-    lat: float
-    lng: float
-    zone_score: int
-    total_pois: int
-    categories_breakdown: dict
-    scraped_data: Optional[List[dict]] = None  # Подмешивание данных внешних парсеров (Apify/Yandex)
+    org_text: str
+    scores: dict
+    scraped_data: list = []
 
-class ReportResponse(BaseModel):
-    status: str
-    summary_text: str
-    recommendation: str
-    metrics_log: dict
+@router.post("/report")
+async def generate_report(req: ReportRequest):
+    s = req.scores
+    p = "Ты опытный городской эксперт. Пишешь живо, с конкретикой, без воды. На русском.\\n\\n"
+    p += "=== РАЙОН ===\\n"
+    p += "Индекс: " + str(s.get("overall","?")) + "/100\\n"
+    p += "Площадь: " + str(s.get("area_km2","?")) + " км2, мест: " + str(s.get("total_places","?")) + "\\n"
+    p += "Метрики: Еда " + str(s.get("food","?")) + ", Здоровье " + str(s.get("health","?"))
+    p += ", Шопинг " + str(s.get("shopping","?")) + ", Спорт " + str(s.get("sport","?"))
+    p += ", Образование " + str(s.get("education","?")) + ", Досуг " + str(s.get("entertainment","?")) + "\\n\\n"
 
-@router.post("/generate", response_model=ReportResponse)
-async def generate_report(payload: ReportRequest):
-    try:
-        # Интеллектуальный анализ структуры для исключения ошибок ручной или автоматической разметки
-        breakdown = payload.categories_breakdown
+    has_scraped = bool(req.scraped_data)
+    has_summaries = any(x.get("ai_summary") for x in req.scraped_data) if has_scraped else False
 
-        # Корректировка потенциальных аномалий: если внешние scraped_data содержат продуктовые бренды,
-        # проверяем, чтобы они увеличивали вес правильной категории
-        if payload.scraped_data:
-            for item in payload.scraped_data:
-                name_lower = item.get("name", "").lower()
-                if any(brand in name_lower for brand in ["магнит", "пятерочка", "дикси", "перекресток"]):
-                    # Если объект был ошибочно посчитан в другую категорию, корректируем баланс
-                    if "pharmacies" in breakdown and breakdown["pharmacies"] > 0 and "аптек" in name_lower:
-                        pass # Это действительно аптека Магнит
-                    else:
-                        breakdown["supermarkets"] = breakdown.get("supermarkets", 0) + 1
+    if has_scraped:
+        sorted_data = sorted(req.scraped_data, key=lambda x: (x.get("reviews_count", 0) or 0), reverse=True)
+        p += "=== ЗАВЕДЕНИЯ (Яндекс.Карты) ===\\n"
+        for item in sorted_data[:20]:
+            name = (item.get("name") or "")[:60]
+            rating = item.get("rating", 0)
+            reviews = item.get("reviews_count", 0)
+            cat = (item.get("category") or "")[:30]
+            summary = (item.get("ai_summary") or "").strip()
+            if not name:
+                continue
+            line = "- " + name + " [" + cat + "] *" + str(rating) + " (" + str(reviews) + " отзывов)"
+            if summary:
+                line += "\\n  Отзывы: " + summary
+            p += line + "\\n"
+        ratings = [x.get("rating", 0) for x in req.scraped_data if x.get("rating", 0) > 0]
+        if ratings:
+            avg = round(sum(ratings) / len(ratings), 2)
+            p += "\\nСредний рейтинг района: " + str(avg) + "/5\\n\\n"
+    else:
+        p += "=== ОРГАНИЗАЦИИ ===\\n" + req.org_text[:1500] + "\\n\\n"
 
-        # Формирование лаконичного коммерческого заключения без лишней воды
-        score = payload.zone_score
-        if score >= 75:
-            conclusion = "Локация обладает наивысшим торговым потенциалом. Высокая концентрация трафика при сбалансированном окружении."
-            rec_text = "Рекомендуется немедленное развертывание коммерческих точек флагманского формата."
-        elif score >= 55:
-            conclusion = "Стабильная квартальная зона со сформированным спросом. Наблюдается умеренная конкурентная нагрузка."
-            rec_text = "Рекомендуется открытие точек стандартного или дисконтного формата с фокусом на локальный трафик."
-        else:
-            conclusion = "Зона с низким или несбалансированным коммерческим потенциалом. Высокие риски окупаемости."
-            rec_text = "Требуется детальный аудит пешеходных потоков перед принятием решения."
+    p += "Напиши КРАТКО (3-4 предложения на раздел):\\n"
+    p += "## Характер квартала\\n"
+    if has_scraped:
+        p += "## Куда стоит сходить\\n## Куда лучше не ходить\\n"
+    else:
+        p += "## Еда и досуг\\n## Шопинг и сервисы\\n"
+    p += "## Плюсы\\n## Минусы\\n"
+    if has_summaries:
+        p += "## О чём говорят жители\\n"
+    p += "## Идеи для бизнеса"
 
-        return ReportResponse(
-            status="generated",
-            summary_text=f"Анализ гео-зоны ({payload.lat:.4f}, {payload.lng:.4f}). Итоговый коммерческий индекс: {score}/100. Общее число инфраструктурных объектов (POI): {payload.total_pois}.",
-            recommendation=f"{conclusion} {rec_text}",
-            metrics_log={
-                "evaluated_score": score,
-                "adjusted_supermarkets": breakdown.get("supermarkets", 0),
-                "adjusted_pharmacies": breakdown.get("pharmacies", 0),
-                "external_records_processed": len(payload.scraped_data) if payload.scraped_data else 0
-            }
-        )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Ошибка при сборке коммерческого отчета: {str(e)}")
+    result = ask_nvidia(p)
+    return {"report": result}
