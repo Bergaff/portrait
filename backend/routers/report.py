@@ -23,7 +23,7 @@ async def generate_report(payload: ReportRequest):
     try:
         # Интеллектуальный анализ структуры для исключения ошибок ручной или автоматической разметки
         breakdown = payload.categories_breakdown
-        
+
         # Корректировка потенциальных аномалий: если внешние scraped_data содержат продуктовые бренды,
         # проверяем, чтобы они увеличивали вес правильной категории
         if payload.scraped_data:
