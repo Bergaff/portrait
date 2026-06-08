@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Портрет квартала</title>
+    <title>Atlas — Портрет квартала</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🏘️</text></svg>">
     <link rel="stylesheet" href="/css/style.css">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
     <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css">
@@ -14,90 +15,190 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 </head>
 <body>
 <div id="app">
-    <div id="map"></div>
-    <div id="resizer">
-        <div class="resizer-handle"></div>
-    </div>
-    <div id="chat-panel">
-        <div class="chat-header">
-           <div class="chat-logo">&#127968; AI-урбанист <span style="font-size:10px;color:#667eea;opacity:0.7;">v0.03</span></div>
-            <div id="user-info" style="display:none; align-items:center; gap:10px;">
-                <div id="profile-trigger" onclick="openProfile()">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
-                </div>
-                <button class="btn-auth" onclick="confirmSignOut()">Выйти</button>
+    <!-- Левая навигация -->
+    <nav id="rail">
+        <div class="rail-logo">A</div>
+        <div class="rail-nav">
+            <button class="rail-btn active" title="Обзор" data-icon="compass"></button>
+            <button class="rail-btn" title="Карта" data-icon="map"></button>
+            <button class="rail-btn" title="Тренды" data-icon="trending-up"></button>
+            <button class="rail-btn" title="Районы" data-icon="layers"></button>
+            <button class="rail-btn" title="События" data-icon="activity"></button>
+        </div>
+        <div class="rail-bottom">
+            <button class="rail-btn" title="Настройки" data-icon="settings"></button>
+        </div>
+    </nav>
+
+    <!-- Основная область -->
+    <div id="main">
+        <!-- Верхняя панель -->
+        <header id="header">
+            <div class="header-left">
+                <h1 class="header-title">Atlas Urban Analytics</h1>
+                <span class="header-badge">v1.0</span>
             </div>
-            <button id="auth-btn" class="btn-auth" onclick="toggleAuth()">Войти</button>
-        </div>
-        <div class="search-box">
-            <input type="text" id="search-input" placeholder="Поиск улицы, адреса...">
-            <div id="search-results"></div>
-        </div>
-        <button id="analyze-btn" class="btn-primary" style="display:none;" onclick="analyzeArea()">Анализировать район</button>
-        <div id="scores-panel" style="display:none;"></div>
-        <button id="report-btn" class="btn-secondary" style="display:none;" onclick="generateReport()">Полный отчёт</button>
-        <button id="scrape-btn" class="btn-secondary" style="display:none;" onclick="openScrapeModal()">📊 Парсить отзывы (Яндекс)</button>
-        <div id="quick-questions" style="display:none;">
-            <button class="btn-quick" onclick="askQuick(this.dataset.q)" data-q="Какой бизнес открыть?">Бизнес?</button>
-            <button class="btn-quick" onclick="askQuick(this.dataset.q)" data-q="Безопасно ли тут?">Безопасно?</button>
-            <button class="btn-quick" onclick="askQuick(this.dataset.q)" data-q="Подходит для семьи?">Для семьи?</button>
-            <button class="btn-quick" onclick="askQuick(this.dataset.q)" data-q="Чего не хватает в районе?">Чего нет?</button>
-        </div>
-        <div id="chat-messages"></div>
-        <div class="chat-input-box">
-            <input type="text" id="chat-input" placeholder="Спросите про район...">
-            <button id="send-btn" onclick="sendMessage()">&#8594;</button>
+            <div class="header-right">
+                <div class="search-box">
+                    <i data-lucide="search" class="search-icon"></i>
+                    <input type="text" id="search-input" placeholder="Поиск адреса, района...">
+                    <div id="search-results"></div>
+                </div>
+                <div id="user-info" style="display:none;">
+                    <div id="profile-trigger" onclick="openProfile()" title="Профиль">
+                        <i data-lucide="user"></i>
+                    </div>
+                    <button class="btn-ghost" onclick="confirmSignOut()">Выйти</button>
+                </div>
+                <button id="auth-btn" class="btn-primary-sm" onclick="toggleAuth()">Войти</button>
+            </div>
+        </header>
+
+        <!-- Контент: карта + сайдбар -->
+        <div id="workspace">
+            <!-- Карта -->
+            <section id="map-section">
+                <div id="map"></div>
+                <div id="map-legend">
+                    <p class="legend-title">Плотность POI</p>
+                    <div class="legend-items">
+                        <span><span class="legend-dot high"></span>Высокая</span>
+                        <span><span class="legend-dot mid"></span>Средняя</span>
+                        <span><span class="legend-dot low"></span>Низкая</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Resizer -->
+            <div id="resizer"><div class="resizer-handle"></div></div>
+
+            <!-- Правая панель -->
+            <aside id="sidebar">
+                <!-- Метрики -->
+                <div id="scores-panel" style="display:none;"></div>
+
+                <!-- Действия -->
+                <div id="actions-panel" style="display:none;">
+                    <button id="analyze-btn" class="btn-primary" onclick="analyzeArea()">
+                        <i data-lucide="activity"></i> Анализировать
+                    </button>
+                    <button id="report-btn" class="btn-outline" style="display:none;" onclick="generateReport()">
+                        <i data-lucide="file-text"></i> Полный отчёт
+                    </button>
+                    <button id="scrape-btn" class="btn-outline" style="display:none;" onclick="openScrapeModal()">
+                        <i data-lucide="sparkles"></i> Парсить отзывы
+                    </button>
+                </div>
+
+                <!-- Быстрые вопросы -->
+                <div id="quick-questions" style="display:none;">
+                    <button class="btn-chip" onclick="askQuick('Какой бизнес открыть?')">Бизнес?</button>
+                    <button class="btn-chip" onclick="askQuick('Безопасно ли тут?')">Безопасно?</button>
+                    <button class="btn-chip" onclick="askQuick('Подходит для семьи?')">Для семьи?</button>
+                    <button class="btn-chip" onclick="askQuick('Чего не хватает?')">Чего нет?</button>
+                </div>
+
+                <!-- AI Чат -->
+                <div id="chat-section">
+                    <div class="chat-section-header">
+                        <i data-lucide="sparkles" class="spark-icon"></i>
+                        <span>AI-урбанист</span>
+                        <span class="version-badge">v1.0</span>
+                    </div>
+                    <div id="chat-messages"></div>
+                    <div class="chat-input-box">
+                        <input type="text" id="chat-input" placeholder="Спросите про район...">
+                        <button id="send-btn" onclick="sendMessage()" title="Отправить">
+                            <i data-lucide="send"></i>
+                        </button>
+                    </div>
+                </div>
+            </aside>
         </div>
     </div>
 
-    <!-- CITY MODAL — показывается по умолчанию, JS решает скрывать ли -->
+    <!-- City Modal -->
     <div id="city-modal">
-        <div class="city-modal-bg"></div>
-        <div class="city-modal-box">
-            <div class="city-modal-icon">&#127968;</div>
-            <h2 class="city-modal-title">Портрет квартала</h2>
-            <p class="city-modal-sub">AI-анализ городской инфраструктуры</p>
+        <div class="modal-bg"></div>
+        <div class="modal-box">
+            <div class="modal-icon">🏘️</div>
+            <h2>Atlas Urban Analytics</h2>
+            <p class="modal-sub">AI-анализ городской инфраструктуры</p>
             <div id="city-detecting">Определяем ваш город...</div>
             <div id="city-confirm" style="display:none;">
-                <p style="color:#ccc;font-size:14px;margin-bottom:12px;">Ваш город: <b id="city-name-show" style="color:#667eea;"></b>?</p>
-                <div style="display:flex;gap:8px;justify-content:center;margin-bottom:16px;">
-                    <button class="btn-primary" style="margin:0;padding:10px 24px;" onclick="confirmCity()">Да</button>
-                    <button class="btn-secondary" style="margin:0;padding:10px 24px;" onclick="showCityInput()">Другой</button>
+                <p>Ваш город: <b id="city-name-show"></b>?</p>
+                <div class="modal-actions">
+                    <button class="btn-primary" onclick="confirmCity()">Да</button>
+                    <button class="btn-outline" onclick="showCityInput()">Другой</button>
                 </div>
             </div>
             <div id="city-input-block" style="display:none;">
-                <input type="text" id="city-input" class="auth-input" placeholder="Введите город...">
-                <div id="city-search-results" style="background:#2a2a4a;border-radius:10px;max-height:150px;overflow-y:auto;margin-bottom:8px;"></div>
-                <button class="btn-primary" style="margin:0;width:100%;padding:10px;" onclick="searchAndGoCity()">Перейти</button>
+                <input type="text" id="city-input" placeholder="Введите город...">
+                <button class="btn-primary" onclick="searchAndGoCity()">Перейти</button>
             </div>
-            <button class="btn-link" onclick="skipCity()" style="margin-top:12px;">Пропустить</button>
+            <button class="btn-link" onclick="skipCity()">Пропустить</button>
         </div>
     </div>
 
+    <!-- Auth Modal -->
+    <div id="auth-modal" style="display:none;">
+        <div class="modal-bg"></div>
+        <div class="modal-box">
+            <button class="modal-close" onclick="toggleAuth()">×</button>
+            <h2>Вход в систему</h2>
+            <button class="btn-social" onclick="socialLogin('google')">
+                <span class="social-icon" style="background:#fff;color:#000">G</span> Через Google
+            </button>
+            <button class="btn-social" onclick="loginYandexDirect()">
+                <span class="social-icon" style="background:#FC3F1D">Я</span> Через Яндекс
+            </button>
+            <button class="btn-social" onclick="loginMailruDirect()">
+                <span class="social-icon" style="background:#0077FF">M</span> Через Mail.ru
+            </button>
+            <div class="divider"><span>или email</span></div>
+            <input type="email" id="auth-email" placeholder="Email" class="auth-input">
+            <input type="password" id="auth-password" placeholder="Пароль" class="auth-input">
+            <div id="auth-error"></div>
+            <button class="btn-primary" onclick="emailSignIn()">Войти</button>
+            <button class="btn-outline" onclick="emailSignUp()">Регистрация</button>
+        </div>
+    </div>
+
+    <!-- Profile Modal -->
     <div id="profile-modal" style="display:none;">
-        <div class="auth-content" style="max-width:450px;">
-            <button class="report-close" onclick="closeProfile()">&#10005;</button>
-            <h2>&#128100; Профиль</h2>
+        <div class="modal-bg"></div>
+        <div class="modal-box">
+            <button class="modal-close" onclick="closeProfile()">×</button>
+            <h2>Профиль</h2>
             <div id="profile-content"></div>
         </div>
     </div>
+
+    <!-- Confirm Modal -->
     <div id="confirm-modal" style="display:none;">
-        <div class="auth-content" style="max-width:320px;">
+        <div class="modal-bg"></div>
+        <div class="modal-box" style="max-width:340px">
             <h2>Выйти из аккаунта?</h2>
-            <div style="display:flex;gap:12px;justify-content:center;margin-top:20px;">
-                <button class="btn-primary" style="margin:0;" onclick="doSignOut()">Да, выйти</button>
-                <button class="btn-secondary" style="margin:0;" onclick="closeConfirm()">Отмена</button>
+            <div class="modal-actions">
+                <button class="btn-primary" onclick="doSignOut()">Да, выйти</button>
+                <button class="btn-outline" onclick="closeConfirm()">Отмена</button>
             </div>
         </div>
     </div>
+
+    <!-- Report Modal -->
     <div id="report-modal" style="display:none;">
+        <div class="modal-bg"></div>
         <div class="report-content" id="report-export-area">
             <div class="report-header">
-                <button class="report-close" onclick="closeReport()">&#10005;</button>
-                <button class="btn-pdf" id="pdf-btn" onclick="exportPDF()">&#128196; PDF</button>
+                <button class="modal-close" onclick="closeReport()">×</button>
+                <button class="btn-outline" id="pdf-btn" onclick="exportPDF()">
+                    <i data-lucide="download"></i> PDF
+                </button>
             </div>
             <div id="report-charts">
                 <div class="chart-box"><canvas id="pieChart"></canvas></div>
@@ -107,49 +208,13 @@
             <div id="report-text"></div>
         </div>
     </div>
-    <div id="auth-modal" style="display:none;">
-        <div class="auth-content">
-            <button class="report-close" onclick="toggleAuth()">&#10005;</button>
-            <h2>Вход</h2>
-<button class="btn-social btn-google" onclick="socialLogin('google')">
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" style="margin-right:8px">
-        <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/>
-        <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
-        <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
-        <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
-    </svg>
-    Google
-</button>
-
-<button class="btn-social btn-yandex" onclick="loginYandexDirect()">
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" style="margin-right:8px">
-        <circle cx="12" cy="12" r="10" fill="#FC3F1D"/>
-        <path d="M12 4v16M4 12h16" stroke="white" stroke-width="2"/>
-    </svg>
-    Яндекс
-</button>
-
-<button class="btn-social btn-mailru" onclick="loginMailruDirect()">
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" style="margin-right:8px">
-        <circle cx="12" cy="12" r="10" fill="#0077FF"/>
-        <path d="M8 12l4 4 4-4" stroke="white" stroke-width="2" stroke-linecap="round"/>
-    </svg>
-    Mail.ru
-</button>
-
-<div class="auth-divider"><span>или по email</span></div>
-            <input type="email" id="auth-email" placeholder="Email" class="auth-input">
-            <input type="password" id="auth-password" placeholder="Пароль" class="auth-input">
-            <div id="auth-error" style="color:#f44336;font-size:12px;min-height:18px;"></div>
-            <button class="btn-primary" onclick="emailSignIn()" style="width:100%">Войти</button>
-            <button class="btn-secondary" onclick="emailSignUp()">Зарегистрироваться</button>
-        </div>
-    </div>
 </div>
+
 <script>
     const SUPABASE_URL = "https://epjtzfhlyyrzmcjqqlyw.supabase.co";
     const SUPABASE_KEY = "sb_publishable_yj38_Ym2C8_Sm-MN-icfSw_URGS-h-J";
 </script>
 <script src="/js/app.js"></script>
+<script>lucide.createIcons();</script>
 </body>
 </html>
