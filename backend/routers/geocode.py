@@ -15,7 +15,7 @@ async def detect_city(request: Request):
     # Извлечение реального IP пользователя за прокси-сервером Railway
     forwarded_for = request.headers.get("x-forwarded-for")
     client_ip = forwarded_for.split(",")[0].strip() if forwarded_for else request.client.host
-    
+
     # Дефолтный ответ (безопасный фолбек на случай VPN или отсутствия разрешений)
     fallback_response = {
         "status": "fallback",
@@ -36,12 +36,12 @@ async def detect_city(request: Request):
                 response = await client.get(url)
                 if response.status_code == 200:
                     data = response.json()
-                    
+
                     # Парсинг ответа в зависимости от структуры провайдера
                     city = data.get("city") or data.get("city_name")
                     lat = data.get("lat") or data.get("latitude")
                     lng = data.get("lon") or data.get("longitude") or data.get("lng")
-                    
+
                     # Защита от ложного VPN-позиционирования
                     if city and lat and lng:
                         return {
@@ -53,5 +53,5 @@ async def detect_city(request: Request):
                         }
             except Exception:
                 continue # Пробуем следующий провайдер, если текущий недоступен
-                
+
     return fallback_response
