@@ -1,5 +1,5 @@
 fastapi
-uvicorn[standard]
-openai
-requests
+uvicorn
 pydantic
+requests
+google-genai
