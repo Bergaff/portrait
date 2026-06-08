@@ -20,7 +20,7 @@ async def generate_response(messages: list) -> str:
         # Извлекаем системный промпт, если он передан в структуре роутера
         system_instruction = None
         contents = []
-        
+
         for msg in messages:
             if msg["role"] == "system":
                 system_instruction = msg["content"]
@@ -35,21 +35,21 @@ async def generate_response(messages: list) -> str:
             max_output_tokens=300,
             system_instruction=system_instruction
         )
-        
+
         # Используем универсальную легковесную и быструю модель, идеальную для SaaS-панелей
         response = client.models.generate_content(
             model='gemini-2.5-flash',
             contents=contents,
             config=config
         )
-        
+
         raw_text = response.text if response.text else ""
-        
+
         # Постобработка текста: срезаем случайные вводные фразы нейросетей, если они проскочили
         cleaned_text = re.sub(r'^(конечно|разумеется|давайте рассмотрим|исходя из ваших данных)[,\s]*', '', raw_text, flags=re.IGNORECASE)
         cleaned_text = cleaned_text.strip()
-        
+
         return cleaned_text if cleaned_text else "Данные локации обработаны. Сбоев не обнаружено."
-        
+
     except Exception as e:
         return f"Ошибка обработки запроса моделью: {str(e)}"
