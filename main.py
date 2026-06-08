@@ -1,7 +1,6 @@
 import os
 import sys
 
-# Принудительная регистрация путей в системном окружении контейнера
 current_dir = os.path.dirname(os.path.abspath(__file__))
 if current_dir not in sys.path:
     sys.path.insert(0, current_dir)
@@ -9,12 +8,18 @@ if current_dir not in sys.path:
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-# Импортируем роутеры локально. Если Python считает корень рабочей директорией, 
-# он подтянет их через блоки try/except в любом окружении окружения хостинга.
+# Универсальный импорт роутеров
 try:
     from backend.routers import analyze, report, chat, geocode
 except ModuleNotFoundError:
-    from routers import analyze, report, chat, geocode
+    try:
+        from routers import analyze, report, chat, geocode
+    except ModuleNotFoundError:
+        # Крайний случай — если структура совсем другая
+        import routers.analyze as analyze
+        import routers.report as report
+        import routers.chat as chat
+        import routers.geocode as geocode
 
 app = FastAPI(
     title="Atlas Urban Analytics API",
