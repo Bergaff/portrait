@@ -362,6 +362,249 @@ document.getElementById("search-input").addEventListener("input", e => {
     }, 400);
 });
 
+
+// ========== PRO АНАЛИЗ (через Apify) ==========
+async function analyzeAreaPro() {
+    if (!state.bbox) { addBotMessage("⚠ Сначала выделите область"); return; }
+    
+    // Заглушка проверки PRO статуса (потом подключим к Supabase)
+    const isPro = currentUser && (localStorage.getItem("is_pro_" + currentUser.id) === "1");
+    
+    if (!isPro && !currentUser) {
+        addBotMessage("💎 Премиум-анализ доступен после входа в аккаунт.");
+        toggleAuth();
+        return;
+    }
+    
+    if (!isPro) {
+        // Временный режим для тестирования - даём всем зарегистрированным
+        const allowTest = confirm("💎 Премиум-анализ\n\nЭто платная функция (~$0.4 за анализ). На этапе тестирования она бесплатна.\n\nЗапустить?");
+        if (!allowTest) return;
+    }
+    
+    const btn = document.getElementById("analyze-pro-btn");
+    btn.disabled = true;
+    btn.innerHTML = '<i data-lucide="loader"></i> Парсим...';
+    lucide.createIcons();
+    
+    state.reportCache = null;
+    state.scrapedData = [];
+    state.scrapeRunId = null;
+    state.organizations = [];
+    if (state.heatLayer) { map.removeLayer(state.heatLayer); state.heatLayer = null; }
+    if (state.markersLayer) { map.removeLayer(state.markersLayer); state.markersLayer = null; }
+    if (state.scrapedMarkersLayer) { map.removeLayer(state.scrapedMarkersLayer); state.scrapedMarkersLayer = null; }
+    trackRequest();
+    
+    addBotMessage("🔄 Запуск премиум-парсинга Яндекс.Карт...");
+    
+    try {
+        const allCats = ["Еда", "Здоровье", "Шопинг", "Красота", "Спорт", "Образование", "Досуг", "Авто", "Финансы", "Услуги", "Госучреждения"];
+        const r = await fetch("/api/scrape/start", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                bbox: state.bbox,
+                categories: allCats,
+                max_results: 100,
+                enrich_data: false
+            })
+        });
+        const d = await r.json();
+        if (d.detail === "PRO_REQUIRED") {
+            addBotMessage("💎 Требуется PRO-подписка");
+            return;
+        }
+        if (!d.run_id) {
+            addBotMessage("✗ Ошибка: " + (d.detail || "unknown"));
+            return;
+        }
+        
+        if (d.from_cache) {
+            addBotMessage("⚡ Данные из кеша (возраст: " + (d.cache_age_min || 0) + " мин) — мгновенно!");
+        }
+        
+        state.scrapeRunId = d.run_id;
+        pollProAnalyze(d.run_id);
+    } catch (e) {
+        addBotMessage("✗ " + e.message);
+    } finally {
+        setTimeout(() => {
+            btn.disabled = false;
+            btn.innerHTML = '<i data-lucide="sparkles"></i> Премиум-анализ <span class="btn-tag tag-pro">PRO</span>';
+            lucide.createIcons();
+        }, 2000);
+    }
+}
+
+function pollProAnalyze(runId) {
+    let attempts = 0;
+    const max = 36;
+    if (scrapingPollInterval) clearInterval(scrapingPollInterval);
+    
+    // Если это кешированный результат - сразу запрашиваем
+    const interval = runId.startsWith("cached_") ? 100 : 10000;
+    
+    scrapingPollInterval = setInterval(async () => {
+        attempts++;
+        if (attempts > max) {
+            clearInterval(scrapingPollInterval);
+            addBotMessage("⏱ Таймаут");
+            return;
+        }
+        try {
+            const r = await fetch("/api/scrape/status/" + runId);
+            const d = await r.json();
+            if (d.status === "SUCCEEDED") {
+                clearInterval(scrapingPollInterval);
+                processApifyResults(d.data || [], d.from_cache);
+            } else if (["FAILED", "ABORTED", "TIMED-OUT"].includes(d.status)) {
+                clearInterval(scrapingPollInterval);
+                addBotMessage("✗ Парсинг не удался");
+            } else {
+                if (attempts === 3) addBotMessage("⏳ Парсим Яндекс...");
+                if (attempts === 12) addBotMessage("⏳ Ещё парсим...");
+            }
+        } catch (e) {}
+    }, interval);
+}
+
+function processApifyResults(items, fromCache) {
+    const filtered = items.filter(o => o.lat && o.lon && isInsideDrawn(o.lat, o.lon));
+    if (filtered.length === 0) {
+        addBotMessage("⚠ В выделенной области ничего не найдено");
+        return;
+    }
+    
+    state.organizations = filtered.map(x => ({
+        name: x.name,
+        amenity: mapApifyCategory(x.category),
+        category_raw: x.category,
+        rating: x.rating,
+        reviews_count: x.reviews_count,
+        lat: x.lat,
+        lon: x.lon
+    }));
+    state.scrapedData = filtered;
+    state.scores = calculateApifyScores(filtered);
+    state.categories = countApifyCategories(filtered);
+    state.orgText = filtered.slice(0, 30).map(x =>
+        "- " + x.name + " [" + (x.category || "?") + "] ★" + (x.rating || "?")
+    ).join("\n");
+    state.activeFilter = null;
+    
+    state.heatLayer = L.heatLayer(filtered.map(o => [o.lat, o.lon, 1]), {
+        radius: 22, blur: 18,
+        gradient: { 0.2: "#7c5cff", 0.5: "#a472ff", 0.7: "#d68aff", 1: "#ff8eb8" }
+    }).addTo(map);
+    
+    renderApifyMarkers();
+    showScores(state.scores);
+    
+    const topPlaces = filtered
+        .filter(x => x.rating >= 4.5 && x.reviews_count >= 10)
+        .sort((a, b) => (b.reviews_count || 0) - (a.reviews_count || 0))
+        .slice(0, 3);
+    
+    let msg = (fromCache ? "⚡ " : "✓ ") + "Готово! Яндекс.Карты\nИндекс: " + state.scores.overall + "/100\nЗаведений: " + filtered.length;
+    if (state.scores.avg_rating) msg += "\nСредний рейтинг: ★" + state.scores.avg_rating;
+    if (topPlaces.length > 0) {
+        msg += "\n\n⭐ Топ:";
+        topPlaces.forEach(p => { msg += "\n• " + p.name + " (★" + p.rating + ")"; });
+    }
+    addBotMessage(msg);
+    
+    document.getElementById("report-btn").style.display = "inline-flex";
+    document.getElementById("scrape-btn").style.display = "inline-flex";
+    document.getElementById("quick-questions").style.display = "flex";
+}
+
+function renderApifyMarkers() {
+    if (state.markersLayer) map.removeLayer(state.markersLayer);
+    state.markersLayer = L.layerGroup();
+    state.organizations.forEach(o => {
+        if (!isInsideDrawn(o.lat, o.lon)) return;
+        if (state.activeFilter && state.activeFilter !== "Разнообразие") {
+            if (!(CAT_MAP[state.activeFilter] || []).includes(o.amenity)) return;
+        }
+        let color = "#888";
+        if (o.rating >= 4.5) color = "#1dd1a1";
+        else if (o.rating >= 4.0) color = "#7bd389";
+        else if (o.rating >= 3.5) color = "#feca57";
+        else if (o.rating > 0) color = "#ff6b6b";
+        const radius = Math.min(11, 4 + Math.log10((o.reviews_count || 1) + 1) * 3);
+        let tt = "<b>" + o.name + "</b>";
+        if (o.rating) tt += "<br>★ " + o.rating + " (" + (o.reviews_count || 0) + " отз.)";
+        if (o.category_raw) tt += "<br><i>" + o.category_raw + "</i>";
+        L.circleMarker([o.lat, o.lon], {
+            radius: radius, color: "#fff", weight: 1.5,
+            fillColor: color, fillOpacity: 0.85
+        }).bindTooltip(tt, { direction: "top" }).addTo(state.markersLayer);
+    });
+    state.markersLayer.addTo(map);
+}
+
+function mapApifyCategory(yandexCat) {
+    const c = (yandexCat || "").toLowerCase();
+    if (c.includes("ресторан") || c.includes("кафе") || c.includes("бар") || c.includes("кофейн")) return "cafe";
+    if (c.includes("аптек")) return "pharmacy";
+    if (c.includes("клиник") || c.includes("больниц")) return "clinic";
+    if (c.includes("стомат")) return "dentist";
+    if (c.includes("супермаркет") || c.includes("продукт")) return "supermarket";
+    if (c.includes("магаз") || c.includes("одежд")) return "clothes";
+    if (c.includes("салон") || c.includes("парикмахер")) return "beauty";
+    if (c.includes("фитнес") || c.includes("спортзал")) return "gym";
+    if (c.includes("школ")) return "school";
+    if (c.includes("банк")) return "bank";
+    if (c.includes("автосерв") || c.includes("автомойк")) return "car_repair";
+    if (c.includes("кино") || c.includes("театр")) return "cinema";
+    if (c.includes("админист") || c.includes("мфц") || c.includes("полиц")) return "townhall";
+    return "другое";
+}
+
+function countApifyCategories(items) {
+    const result = {};
+    items.forEach(x => {
+        const a = mapApifyCategory(x.category);
+        for (const [catName, list] of Object.entries(CAT_MAP)) {
+            if (list.includes(a)) {
+                result[catName] = (result[catName] || 0) + 1;
+                break;
+            }
+        }
+    });
+    return result;
+}
+
+function calculateApifyScores(items) {
+    const parts = state.bbox.split(",").map(parseFloat);
+    const area = Math.max((parts[2]-parts[0])*111*(parts[3]-parts[1])*111*0.6, 0.01);
+    const total = Math.max(items.length, 1);
+    const cats = countApifyCategories(items);
+    const ratings = items.filter(x => x.rating > 0).map(x => x.rating);
+    const avgRating = ratings.length ? Math.round(ratings.reduce((a,b)=>a+b,0)/ratings.length * 10) / 10 : 0;
+    
+    const food = Math.min(100, Math.round((cats["Еда"]||0)/total*280));
+    const health = Math.min(100, Math.round((cats["Здоровье"]||0)/area/5*100));
+    const sport = Math.min(100, Math.round((cats["Спорт"]||0)/area/3*100));
+    const edu = Math.min(100, Math.round((cats["Образование"]||0)/area/2*100));
+    const shop = Math.min(100, Math.round((cats["Шопинг"]||0)/total*220));
+    const fun = Math.min(100, Math.round((cats["Досуг"]||0)/area/3*100));
+    const density = Math.min(100, Math.round(total/area/150*100));
+    const div = Math.min(100, Math.round(Object.keys(cats).length/10*100));
+    const ratingBonus = avgRating > 3 ? Math.round((avgRating - 3) * 5) : 0;
+    const overall = Math.min(100, Math.round(density*0.15+food*0.15+health*0.15+sport*0.1+edu*0.1+shop*0.15+div*0.15+ratingBonus));
+    
+    return {
+        overall, density, food, health, sport, education: edu,
+        shopping: shop, entertainment: fun, diversity: div,
+        area_km2: Math.round(area*1000)/1000,
+        total_places: items.length,
+        avg_rating: avgRating
+    };
+}
+
+
 // ========== ANALYZE ==========
 async function analyzeArea() {
     if (!state.bbox) return;
