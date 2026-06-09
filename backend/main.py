@@ -26,3 +26,11 @@ app.mount("/js", StaticFiles(directory="frontend/js"), name="js")
 @app.get("/")
 async def root():
     return FileResponse("frontend/index.html")
+
+@app.get("/favicon.png")
+async def favicon_png():
+    return FileResponse("frontend/favicon.png")
+
+@app.get("/favicon.ico")
+async def favicon_ico():
+    return FileResponse("frontend/favicon.png")
