@@ -1,6 +1,25 @@
 // ========== ВЕРСИЯ ==========
 const APP_VERSION = "1.0";
 
+// ========== ТЕМА ==========
+function toggleTheme() {
+    const cur = document.body.getAttribute("data-theme") || "dark";
+    const newTheme = cur === "dark" ? "light" : "dark";
+    document.body.setAttribute("data-theme", newTheme);
+    localStorage.setItem("qp_theme", newTheme);
+    // Перерисовываем карту с новыми тайлами
+    if (window.currentTileLayer) map.removeLayer(window.currentTileLayer);
+    const tileUrl = newTheme === "light"
+        ? "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+        : "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png";
+    window.currentTileLayer = L.tileLayer(tileUrl, {
+        attribution: "OpenStreetMap, CARTO", maxZoom: 19
+    }).addTo(map);
+    setTimeout(() => lucide.createIcons(), 50);
+}
+const savedTheme = localStorage.getItem("qp_theme") || "dark";
+document.body.setAttribute("data-theme", savedTheme);
+
 // ========== SUPABASE ==========
 const { createClient } = supabase;
 const supabaseClient = createClient(SUPABASE_URL, SUPABASE_KEY, {
@@ -10,9 +29,19 @@ let currentUser = null;
 let userStats = { requests: 0 };
 
 async function initAuth() {
-    const { data: { session } } = await supabaseClient.auth.getSession();
-    if (session) { currentUser = session.user; updateAuthUI(); loadUserStats(); }
-    else { updateAuthUILoggedOut(); }
+    try {
+        const { data: { session } } = await supabaseClient.auth.getSession();
+        if (session) { currentUser = session.user; updateAuthUI(); loadUserStats(); }
+        else { updateAuthUILoggedOut(); }
+    } catch (e) {
+        console.warn("Supabase недоступен:", e);
+        updateAuthUILoggedOut();
+        // Показываем плашку только один раз
+        if (!localStorage.getItem("qp_supabase_warned")) {
+            setTimeout(() => addBotMessage("⚠ Сервис авторизации временно недоступен. Анализ работает без входа."), 1500);
+            localStorage.setItem("qp_supabase_warned", "1");
+        }
+    }
 }
 supabaseClient.auth.onAuthStateChange((event, session) => {
     if (session && session.user) {
@@ -156,7 +185,7 @@ let state = {
     chatHistory: [], heatLayer: null, markersLayer: null, scrapedMarkersLayer: null,
     pieChart: null, barChart: null, radarChart: null,
     activeFilter: null, reportCache: null, chatBusy: false,
-    scrapedData: [], scrapeRunId: null, scrapeEnriched: false
+    scrapedData: [], scrapeRunId: null, scrapeEnriched: false, drawnLayer: null
 };
 
 // ========== RESIZER ==========
@@ -192,7 +221,11 @@ if (resizer && sidebar) {
 
 // ========== MAP ==========
 const map = L.map("map").setView([55.7558, 37.6173], 13);
-L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
+const initTheme = document.body.getAttribute("data-theme") || "dark";
+const initTileUrl = initTheme === "light"
+    ? "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+    : "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png";
+window.currentTileLayer = L.tileLayer(initTileUrl, {
     attribution: "OpenStreetMap, CARTO", maxZoom: 19
 }).addTo(map);
 window.map = map;
@@ -210,6 +243,7 @@ map.addControl(drawControl);
 map.on("draw:created", e => {
     drawnItems.clearLayers();
     drawnItems.addLayer(e.layer);
+    state.drawnLayer = e.layer; // сохраняем для проверки point-in-polygon
     const b = e.layer.getBounds();
     state.bbox = b.getSouth() + "," + b.getWest() + "," + b.getNorth() + "," + b.getEast();
     document.getElementById("actions-panel").style.display = "flex";
@@ -351,15 +385,22 @@ async function analyzeArea() {
         state.orgText = data.org_text;
         state.activeFilter = null;
         if (state.heatLayer) map.removeLayer(state.heatLayer);
-        if (data.organizations.length > 0) {
-            state.heatLayer = L.heatLayer(data.organizations.map(o => [o.lat, o.lon, 1]), {
+        const filtered = data.organizations.filter(o => isInsideDrawn(o.lat, o.lon));
+        if (filtered.length > 0) {
+            state.heatLayer = L.heatLayer(filtered.map(o => [o.lat, o.lon, 1]), {
                 radius: 22, blur: 18,
                 gradient: { 0.2: "#7c5cff", 0.5: "#a472ff", 0.7: "#d68aff", 1: "#ff8eb8" }
             }).addTo(map);
         }
         renderFilteredMarkers();
         showScores(data.scores);
-        addBotMessage("✓ Индекс: " + data.scores.overall + "/100\nНайдено " + data.scores.total_places + " мест\n\nКликайте по метрикам слева для фильтра");
+        const namedCount = data.organizations.length;
+        const totalCount = data.scores.total_places;
+        const hiddenCount = totalCount - namedCount;
+        let msg = "✓ Индекс: " + data.scores.overall + "/100\nИменованных мест: " + namedCount;
+        if (hiddenCount > 0) msg += "\n(скрыто " + hiddenCount + " безымянных)";
+        msg += "\n\nКликайте по метрикам слева для фильтра\nНажмите «Парсить отзывы» для данных с Яндекс.Карт";
+        addBotMessage(msg);
         document.getElementById("report-btn").style.display = "inline-flex";
         document.getElementById("scrape-btn").style.display = "inline-flex";
         document.getElementById("quick-questions").style.display = "flex";
@@ -399,6 +440,7 @@ function renderFilteredMarkers() {
     if (state.markersLayer) map.removeLayer(state.markersLayer);
     state.markersLayer = L.layerGroup();
     state.organizations.forEach(o => {
+        if (!isInsideDrawn(o.lat, o.lon)) return; // ФИЛЬТР по области
         if (state.activeFilter && state.activeFilter !== "Разнообразие") {
             if (!(CAT_MAP[state.activeFilter] || []).includes(o.amenity)) return;
         }
@@ -408,6 +450,32 @@ function renderFilteredMarkers() {
     });
     state.markersLayer.addTo(map);
 }
+
+// Проверка: точка внутри нарисованной области?
+function isInsideDrawn(lat, lon) {
+    if (!state.drawnLayer) return true;
+    const pt = L.latLng(lat, lon);
+    // Для прямоугольника
+    if (state.drawnLayer.getBounds && !state.drawnLayer.getLatLngs) {
+        return state.drawnLayer.getBounds().contains(pt);
+    }
+    // Для полигона — ray casting
+    const latlngs = state.drawnLayer.getLatLngs()[0] || state.drawnLayer.getLatLngs();
+    if (!latlngs || latlngs.length < 3) {
+        return state.drawnLayer.getBounds().contains(pt);
+    }
+    let inside = false;
+    for (let i = 0, j = latlngs.length - 1; i < latlngs.length; j = i++) {
+        const xi = latlngs[i].lat, yi = latlngs[i].lng;
+        const xj = latlngs[j].lat, yj = latlngs[j].lng;
+        const intersect = ((yi > lon) !== (yj > lon)) &&
+            (lat < (xj - xi) * (lon - yi) / (yj - yi) + xi);
+        if (intersect) inside = !inside;
+    }
+    return inside;
+}
+
+
 
 // ========== SCORES ==========
 function showScores(s) {
@@ -419,12 +487,12 @@ function showScores(s) {
     html += '<div class="score-sub">' + s.total_places + ' мест · ' + s.area_km2 + ' км²</div>';
     html += '</div>';
 
-    const metrics = [
-        { label: "Еда", value: s.food }, { label: "Здоровье", value: s.health },
-        { label: "Шопинг", value: s.shopping }, { label: "Спорт", value: s.sport },
-        { label: "Образование", value: s.education }, { label: "Досуг", value: s.entertainment },
-        { label: "Разнообразие", value: s.diversity }
-    ];
+  const metrics = [
+      { label: "Еда", value: s.food }, { label: "Здоровье", value: s.health },
+      { label: "Шопинг", value: s.shopping }, { label: "Спорт", value: s.sport },
+      { label: "Образование", value: s.education }, { label: "Досуг", value: s.entertainment },
+      { label: "Разнообразие", value: s.diversity }
+  ];
     html += '<div class="score-card"><div class="score-label">Метрики</div><div class="metrics-grid">';
     metrics.forEach(m => {
         const color = m.value >= 60 ? "var(--success)" : m.value >= 30 ? "var(--warning)" : "var(--destructive)";
@@ -594,6 +662,7 @@ function renderScrapedMarkers() {
     state.scrapedMarkersLayer = L.layerGroup();
     state.scrapedData.forEach(o => {
         if (!o.lat || !o.lon) return;
+        if (!isInsideDrawn(o.lat, o.lon)) return;
         let color = "#888";
         if (o.rating >= 4.5) color = "#1dd1a1";
         else if (o.rating >= 4.0) color = "#7bd389";
