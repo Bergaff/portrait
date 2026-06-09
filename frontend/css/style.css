@@ -438,3 +438,32 @@ body[data-theme="light"] #theme-toggle .icon-light { display: block; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--muted-fg); }
+
+
+.btn-tag {
+    margin-left: 8px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 9px;
+    font-weight: 700;
+    font-family: 'SF Mono', Monaco, monospace;
+    letter-spacing: 0.5px;
+}
+.tag-free {
+    background: rgba(255,255,255,0.15);
+    color: var(--muted-fg);
+}
+.tag-pro {
+    background: linear-gradient(135deg, #feca57, #ff6b6b);
+    color: #000;
+}
+#analyze-pro-btn {
+    border-color: oklch(0.7 0.18 50);
+    color: var(--foreground);
+}
+#analyze-pro-btn:hover {
+    background: oklch(0.7 0.18 50 / 0.1);
+}
+
+
+
