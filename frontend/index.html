@@ -42,13 +42,17 @@
                 <h1 class="header-title">Atlas Urban Analytics</h1>
                 <span class="header-badge">v1.0</span>
             </div>
-            <div class="header-right">
-                <div class="search-box">
-                    <i data-lucide="search" class="search-icon"></i>
-                    <input type="text" id="search-input" placeholder="Поиск адреса, района...">
-                    <div id="search-results"></div>
-                </div>
-                <div id="user-info" style="display:none;">
+    <div class="header-right">
+        <div class="search-box">
+            <i data-lucide="search" class="search-icon"></i>
+            <input type="text" id="search-input" placeholder="Поиск адреса, района...">
+            <div id="search-results"></div>
+        </div>
+        <button id="theme-toggle" onclick="toggleTheme()" title="Тема">
+            <i data-lucide="moon" class="icon-dark"></i>
+            <i data-lucide="sun" class="icon-light"></i>
+        </button>
+        <div id="user-info" style="display:none;">
                     <div id="profile-trigger" onclick="openProfile()" title="Профиль">
                         <i data-lucide="user"></i>
                     </div>
