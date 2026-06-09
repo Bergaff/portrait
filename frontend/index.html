@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Atlas — Портрет квартала</title>
     <link rel="icon" type="image/png" href="/favicon.png">
+    <link rel="shortcut icon" type="image/png" href="/favicon.png">
     <link rel="stylesheet" href="/css/style.css">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
     <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css">
@@ -88,7 +89,12 @@
                 <!-- Действия -->
                 <div id="actions-panel" style="display:none;">
                     <button id="analyze-btn" class="btn-primary" onclick="analyzeArea()">
-                        <i data-lucide="activity"></i> Анализировать
+                        <i data-lucide="activity"></i> Анализ (быстрый)
+                        <span class="btn-tag tag-free">FREE</span>
+                    </button>
+                    <button id="analyze-pro-btn" class="btn-outline" onclick="analyzeAreaPro()">
+                        <i data-lucide="sparkles"></i> Премиум-анализ
+                        <span class="btn-tag tag-pro">PRO</span>
                     </button>
                     <button id="report-btn" class="btn-outline" style="display:none;" onclick="generateReport()">
                         <i data-lucide="file-text"></i> Полный отчёт
