@@ -73,7 +73,7 @@ from services.subscription import is_pro_user, get_user_id_from_token
 async def start_scrape(req: ScrapeRequest, authorization: str = Header(default="")):
     if not APIFY_TOKEN:
         raise HTTPException(status_code=500, detail="APIFY_TOKEN not set")
-    
+
     # Проверяем PRO статус (на этапе разработки — пропускаем, чтобы тестить)
     # token = authorization.replace("Bearer ", "")
     # user_id = get_user_id_from_token(token)
