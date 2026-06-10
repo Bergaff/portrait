@@ -6,7 +6,7 @@ router = APIRouter()
 @router.get("/search")
 async def search_address(q: str):
     results = []
-    
+
     # 1. Photon (Komoot) — основной геокодер
     try:
         r = requests.get(
@@ -29,7 +29,7 @@ async def search_address(q: str):
                     results.append({"display_name": display, "lat": float(coords[1]), "lon": float(coords[0])})
     except Exception as e:
         print("Photon error:", e)
-    
+
     # 2. Nominatim — если Photon ничего не нашёл
     if not results:
         try:
