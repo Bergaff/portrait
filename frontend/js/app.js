@@ -366,27 +366,27 @@ document.getElementById("search-input").addEventListener("input", e => {
 // ========== PRO АНАЛИЗ (через Apify) ==========
 async function analyzeAreaPro() {
     if (!state.bbox) { addBotMessage("⚠ Сначала выделите область"); return; }
-    
+
     // Заглушка проверки PRO статуса (потом подключим к Supabase)
     const isPro = currentUser && (localStorage.getItem("is_pro_" + currentUser.id) === "1");
-    
+
     if (!isPro && !currentUser) {
         addBotMessage("💎 Премиум-анализ доступен после входа в аккаунт.");
         toggleAuth();
         return;
     }
-    
+
     if (!isPro) {
         // Временный режим для тестирования - даём всем зарегистрированным
         const allowTest = confirm("💎 Премиум-анализ\n\nЭто платная функция (~$0.4 за анализ). На этапе тестирования она бесплатна.\n\nЗапустить?");
         if (!allowTest) return;
     }
-    
+
     const btn = document.getElementById("analyze-pro-btn");
     btn.disabled = true;
     btn.innerHTML = '<i data-lucide="loader"></i> Парсим...';
     lucide.createIcons();
-    
+
     state.reportCache = null;
     state.scrapedData = [];
     state.scrapeRunId = null;
@@ -395,9 +395,9 @@ async function analyzeAreaPro() {
     if (state.markersLayer) { map.removeLayer(state.markersLayer); state.markersLayer = null; }
     if (state.scrapedMarkersLayer) { map.removeLayer(state.scrapedMarkersLayer); state.scrapedMarkersLayer = null; }
     trackRequest();
-    
+
     addBotMessage("🔄 Запуск премиум-парсинга Яндекс.Карт...");
-    
+
     try {
         const allCats = ["Еда", "Здоровье", "Шопинг", "Красота", "Спорт", "Образование", "Досуг", "Авто", "Финансы", "Услуги", "Госучреждения"];
         const r = await fetch("/api/scrape/start", {
@@ -419,11 +419,11 @@ async function analyzeAreaPro() {
             addBotMessage("✗ Ошибка: " + (d.detail || "unknown"));
             return;
         }
-        
+
         if (d.from_cache) {
             addBotMessage("⚡ Данные из кеша (возраст: " + (d.cache_age_min || 0) + " мин) — мгновенно!");
         }
-        
+
         state.scrapeRunId = d.run_id;
         pollProAnalyze(d.run_id);
     } catch (e) {
@@ -441,10 +441,10 @@ function pollProAnalyze(runId) {
     let attempts = 0;
     const max = 36;
     if (scrapingPollInterval) clearInterval(scrapingPollInterval);
-    
+
     // Если это кешированный результат - сразу запрашиваем
     const interval = runId.startsWith("cached_") ? 100 : 10000;
-    
+
     scrapingPollInterval = setInterval(async () => {
         attempts++;
         if (attempts > max) {
@@ -475,7 +475,7 @@ function processApifyResults(items, fromCache) {
         addBotMessage("⚠ В выделенной области ничего не найдено");
         return;
     }
-    
+
     state.organizations = filtered.map(x => ({
         name: x.name,
         amenity: mapApifyCategory(x.category),
@@ -492,20 +492,20 @@ function processApifyResults(items, fromCache) {
         "- " + x.name + " [" + (x.category || "?") + "] ★" + (x.rating || "?")
     ).join("\n");
     state.activeFilter = null;
-    
+
     state.heatLayer = L.heatLayer(filtered.map(o => [o.lat, o.lon, 1]), {
         radius: 22, blur: 18,
         gradient: { 0.2: "#7c5cff", 0.5: "#a472ff", 0.7: "#d68aff", 1: "#ff8eb8" }
     }).addTo(map);
-    
+
     renderApifyMarkers();
     showScores(state.scores);
-    
+
     const topPlaces = filtered
         .filter(x => x.rating >= 4.5 && x.reviews_count >= 10)
         .sort((a, b) => (b.reviews_count || 0) - (a.reviews_count || 0))
         .slice(0, 3);
-    
+
     let msg = (fromCache ? "⚡ " : "✓ ") + "Готово! Яндекс.Карты\nИндекс: " + state.scores.overall + "/100\nЗаведений: " + filtered.length;
     if (state.scores.avg_rating) msg += "\nСредний рейтинг: ★" + state.scores.avg_rating;
     if (topPlaces.length > 0) {
@@ -513,7 +513,7 @@ function processApifyResults(items, fromCache) {
         topPlaces.forEach(p => { msg += "\n• " + p.name + " (★" + p.rating + ")"; });
     }
     addBotMessage(msg);
-    
+
     document.getElementById("report-btn").style.display = "inline-flex";
     document.getElementById("scrape-btn").style.display = "inline-flex";
     document.getElementById("quick-questions").style.display = "flex";
@@ -583,7 +583,7 @@ function calculateApifyScores(items) {
     const cats = countApifyCategories(items);
     const ratings = items.filter(x => x.rating > 0).map(x => x.rating);
     const avgRating = ratings.length ? Math.round(ratings.reduce((a,b)=>a+b,0)/ratings.length * 10) / 10 : 0;
-    
+
     const food = Math.min(100, Math.round((cats["Еда"]||0)/total*280));
     const health = Math.min(100, Math.round((cats["Здоровье"]||0)/area/5*100));
     const sport = Math.min(100, Math.round((cats["Спорт"]||0)/area/3*100));
@@ -594,7 +594,7 @@ function calculateApifyScores(items) {
     const div = Math.min(100, Math.round(Object.keys(cats).length/10*100));
     const ratingBonus = avgRating > 3 ? Math.round((avgRating - 3) * 5) : 0;
     const overall = Math.min(100, Math.round(density*0.15+food*0.15+health*0.15+sport*0.1+edu*0.1+shop*0.15+div*0.15+ratingBonus));
-    
+
     return {
         overall, density, food, health, sport, education: edu,
         shopping: shop, entertainment: fun, diversity: div,
