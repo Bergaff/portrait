@@ -117,9 +117,16 @@ body {
 #search-results {
     position: absolute; top: 40px; left: 0; right: 0;
     background: var(--popover); border: 1px solid var(--border);
-    border-radius: 8px; max-height: 240px; overflow-y: auto;
-    z-index: 200; box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+    border-radius: 8px; max-height: 320px; overflow-y: auto;
+    z-index: 10000; box-shadow: 0 12px 40px rgba(0,0,0,0.6);
 }
+.search-box { 
+    position: relative; 
+    width: 280px; 
+    z-index: 10001; 
+}
+.leaflet-pane { z-index: 100 !important; }
+.leaflet-top, .leaflet-bottom { z-index: 200 !important; }
 .search-item { padding: 10px 14px; cursor: pointer; font-size: 13px; border-bottom: 1px solid var(--border); }
 .search-item:hover { background: var(--accent); }
 
