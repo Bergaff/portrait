@@ -600,7 +600,8 @@ function calculateApifyScores(items) {
         shopping: shop, entertainment: fun, diversity: div,
         area_km2: Math.round(area*1000)/1000,
         total_places: items.length,
-        avg_rating: avgRating
+        avg_rating: avgRating,
+        poi_density: Math.round(items.length / area * 10) / 10
     };
 }
 
@@ -729,6 +730,28 @@ function showScores(s) {
     html += '<div class="score-big">' + s.overall + '/100</div>';
     html += '<div class="score-sub">' + s.total_places + ' мест · ' + s.area_km2 + ' км²</div>';
     html += '</div>';
+
+    // Карточка плотности
+    html += '<div class="score-card density-card">';
+    html += '<div class="score-label">Плотность POI</div>';
+    html += '<div style="display:flex;justify-content:space-between;align-items:flex-end;margin-top:4px">';
+    html += '<div><div class="score-big" style="font-size:24px">' + (s.poi_density || 0) + '</div>';
+    html += '<div class="score-sub">мест на км²</div></div>';
+    const dLevel = (s.poi_density || 0);
+    let dLabel = "Низкая", dColor = "var(--muted-fg)";
+    if (dLevel > 150) { dLabel = "Очень высокая"; dColor = "var(--primary)"; }
+    else if (dLevel > 80) { dLabel = "Высокая"; dColor = "var(--success)"; }
+    else if (dLevel > 30) { dLabel = "Средняя"; dColor = "var(--warning)"; }
+    html += '<div style="color:' + dColor + ';font-size:12px;font-weight:600">' + dLabel + '</div>';
+    html += '</div></div>';
+
+    if (s.avg_rating) {
+        html += '<div class="score-card">';
+        html += '<div class="score-label">Средний рейтинг</div>';
+        html += '<div class="score-big" style="font-size:24px">★' + s.avg_rating + '</div>';
+        html += '<div class="score-sub">по данным Яндекс.Карт</div>';
+        html += '</div>';
+    }
 
   const metrics = [
       { label: "Еда", value: s.food }, { label: "Здоровье", value: s.health },
