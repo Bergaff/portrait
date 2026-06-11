@@ -94,7 +94,7 @@ async def start_scrape(req: ScrapeRequest):
         south, west, north, east = [float(x) for x in req.bbox.split(",")]
     except:
         raise HTTPException(status_code=400, detail="Bad bbox")
-    
+
     center_lat = (south + north) / 2
     center_lon = (west + east) / 2
     span_lat = abs(north - south)
@@ -111,7 +111,7 @@ async def start_scrape(req: ScrapeRequest):
     queries = list(dict.fromkeys(queries))[:4]
 
     safe_limit = 60 if req.enrich_data else 100
-    
+
     actor_input = {
         "query": queries,
         "coordinates": str(center_lon) + "," + str(center_lat),
@@ -132,10 +132,10 @@ async def start_scrape(req: ScrapeRequest):
     )
     if response.status_code not in (200, 201):
         raise HTTPException(status_code=500, detail="Apify: " + response.text[:300])
-    
+
     run_data = response.json().get("data", {})
     run_id = run_data.get("id")
-    
+
     if run_id:
         CACHE["__pending_" + run_id] = {
             "cache_key": cache_key,
@@ -184,12 +184,12 @@ async def check_status(run_id: str):
         )
         if items_resp.status_code == 200:
             items = items_resp.json()
-            
+
             pending_key = "__pending_" + run_id
             bbox_filter = None
             if pending_key in CACHE:
                 bbox_filter = CACHE[pending_key].get("bbox")
-            
+
             aggregated = []
             outside_count = 0
             for item in items:
@@ -198,17 +198,17 @@ async def check_status(run_id: str):
                     ai_summary = item["aiReviewSummary"][:400]
                 elif isinstance(item.get("reviewsSummary"), str):
                     ai_summary = item["reviewsSummary"][:400]
-                
+
                 lat = item.get("latitude")
                 lon = item.get("longitude")
                 name = item.get("title") or item.get("name", "")
                 if not name or not lat or not lon:
                     continue
-                
+
                 if bbox_filter and not is_inside_bbox(lat, lon, bbox_filter, buffer_pct=0.0):
                     outside_count += 1
                     continue
-                
+
                 aggregated.append({
                     "name": name,
                     "category": item.get("categoryName") or item.get("category", ""),
@@ -219,7 +219,7 @@ async def check_status(run_id: str):
                     "lon": lon,
                     "ai_summary": ai_summary
                 })
-            
+
             result["data"] = aggregated
             result["total"] = len(aggregated)
             result["filtered_out"] = outside_count
