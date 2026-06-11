@@ -95,6 +95,7 @@ function processOAuthCallback() {
         return;
     }
     if (code && sp.get("state") === "mailru") {
+        saveMapPosition(); // ← сохраняем позицию
         window.history.replaceState({}, document.title, window.location.pathname);
         showAuthError("Входим через Mail.ru...");
         fetch("/api/auth/mailru", {
@@ -110,6 +111,7 @@ function processOAuthCallback() {
     }
     const at = hp.get("access_token");
     if (at && hp.get("state") === "yandex") {
+        saveMapPosition(); // ← сохраняем позицию
         window.location.hash = "";
         showAuthError("Входим через Яндекс...");
         fetch("/api/auth/yandex", {
@@ -121,6 +123,14 @@ function processOAuthCallback() {
             } else showAuthError("Ошибка: " + (d.detail || "unknown"));
         }).then(() => window.location.reload())
         .catch(e => { console.error(e); showAuthError("Ошибка входа"); });
+    }
+}
+
+function saveMapPosition() {
+    if (window.map) {
+        const c = map.getCenter();
+        const z = map.getZoom();
+        localStorage.setItem("qp_map_pos", JSON.stringify({ lat: c.lat, lon: c.lng, zoom: z }));
     }
 }
 processOAuthCallback();
@@ -170,14 +180,131 @@ function openProfile() {
     if (!currentUser) { toggleAuth(); return; }
     const d = new Date(currentUser.created_at).toLocaleDateString("ru-RU");
     const p = currentUser.app_metadata?.provider || "email";
+    
     let h = '<div class="profile-row"><span class="profile-label">Email</span><span>' + (currentUser.email || "—") + '</span></div>';
     h += '<div class="profile-row"><span class="profile-label">Способ входа</span><span style="text-transform:capitalize">' + p + '</span></div>';
     h += '<div class="profile-row"><span class="profile-label">Регистрация</span><span>' + d + '</span></div>';
     h += '<div class="profile-row"><span class="profile-label">Запросов</span><span>' + userStats.requests + '</span></div>';
+    
+    // История
+    const history = JSON.parse(localStorage.getItem(getHistoryKey()) || "[]");
+    h += '<div style="margin-top:16px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">';
+    h += '<span class="profile-label" style="font-weight:600">История анализов (' + history.length + ')</span>';
+    if (history.length > 0) {
+        h += '<button class="btn-ghost" style="font-size:11px;padding:3px 8px" onclick="clearHistory()">Очистить</button>';
+    }
+    h += '</div>';
+    
+    if (history.length === 0) {
+        h += '<div class="history-empty">Пока нет сохранённых анализов</div>';
+    } else {
+        h += '<div class="history-list">';
+        history.forEach((item, idx) => {
+            const dt = new Date(item.date);
+            const dtStr = dt.toLocaleDateString("ru-RU") + " " + dt.toLocaleTimeString("ru-RU", {hour:'2-digit', minute:'2-digit'});
+            const modeIcon = item.mode === "free" ? "⚡" : item.mode === "pro+ai" ? "🤖" : "💎";
+            h += '<div class="history-item" onclick="loadFromHistory(' + idx + ')">';
+            h += '<div class="history-item-title">' + modeIcon + ' Индекс: ' + (item.score || "?") + '/100, мест: ' + (item.places || 0) + '</div>';
+            h += '<div class="history-item-meta"><span>' + dtStr + '</span><span>' + (item.mode || "free") + '</span></div>';
+            h += '</div>';
+        });
+        h += '</div>';
+    }
+    h += '</div>';
+    
     document.getElementById("profile-content").innerHTML = h;
     document.getElementById("profile-modal").style.display = "flex";
 }
 function closeProfile() { document.getElementById("profile-modal").style.display = "none"; }
+
+// ========== ИСТОРИЯ ЗАПРОСОВ ==========
+function getHistoryKey() {
+    return currentUser ? "qp_history_" + currentUser.id : "qp_history_guest";
+}
+
+function saveToHistory(mode, placesCount, score) {
+    if (!state.bbox) return;
+    const key = getHistoryKey();
+    let history = [];
+    try {
+        history = JSON.parse(localStorage.getItem(key) || "[]");
+    } catch (e) {}
+    
+    const center = state.drawnLayer ? state.drawnLayer.getBounds().getCenter() : null;
+    
+    history.unshift({
+        bbox: state.bbox,
+        center: center ? [center.lat, center.lng] : null,
+        mode: mode,
+        places: placesCount,
+        score: score,
+        scores: state.scores,
+        organizations: state.organizations.slice(0, 100), // первые 100
+        scrapedData: state.scrapedData.slice(0, 100),
+        orgText: state.orgText.substring(0, 5000),
+        categories: state.categories,
+        date: new Date().toISOString()
+    });
+    
+    // Храним последние 20
+    history = history.slice(0, 20);
+    localStorage.setItem(key, JSON.stringify(history));
+}
+
+function loadFromHistory(idx) {
+    const key = getHistoryKey();
+    const history = JSON.parse(localStorage.getItem(key) || "[]");
+    if (!history[idx]) return;
+    const h = history[idx];
+    
+    state.bbox = h.bbox;
+    state.scores = h.scores || {};
+    state.organizations = h.organizations || [];
+    state.scrapedData = h.scrapedData || [];
+    state.orgText = h.orgText || "";
+    state.categories = h.categories || {};
+    state.reportCache = null;
+    
+    // Перерисовываем bbox на карте
+    drawnItems.clearLayers();
+    if (h.bbox) {
+        const parts = h.bbox.split(",").map(parseFloat);
+        const rect = L.rectangle([[parts[0], parts[1]], [parts[2], parts[3]]], {
+            color: "#7c5cff", fillOpacity: 0.15, weight: 2
+        });
+        drawnItems.addLayer(rect);
+        state.drawnLayer = rect;
+        map.fitBounds(rect.getBounds());
+    }
+    
+    // Перерисовываем
+    if (state.heatLayer) { map.removeLayer(state.heatLayer); }
+    if (state.markersLayer) { map.removeLayer(state.markersLayer); }
+    if (state.scrapedMarkersLayer) { map.removeLayer(state.scrapedMarkersLayer); }
+    
+    if (state.organizations.length > 0) {
+        state.heatLayer = L.heatLayer(
+            state.organizations.filter(o => o.lat && o.lon).map(o => [o.lat, o.lon, 1]),
+            { radius: 22, blur: 18, gradient: { 0.2: "#7c5cff", 0.5: "#a472ff", 0.7: "#d68aff", 1: "#ff8eb8" } }
+        ).addTo(map);
+    }
+    if (h.mode && h.mode.startsWith("pro")) renderApifyMarkers();
+    else renderFilteredMarkers();
+    
+    showScores(state.scores);
+    document.getElementById("actions-panel").style.display = "flex";
+    document.getElementById("report-btn").style.display = "inline-flex";
+    document.getElementById("quick-questions").style.display = "flex";
+    
+    closeProfile();
+    addBotMessage("📂 Загружено из истории: " + new Date(h.date).toLocaleString("ru-RU"));
+}
+
+function clearHistory() {
+    if (!confirm("Удалить всю историю?")) return;
+    localStorage.removeItem(getHistoryKey());
+    openProfile();
+}
 
 // ========== STATE ==========
 let state = {
@@ -229,6 +356,33 @@ window.currentTileLayer = L.tileLayer(initTileUrl, {
     attribution: "OpenStreetMap, CARTO", maxZoom: 19
 }).addTo(map);
 window.map = map;
+// Восстанавливаем позицию карты после reload (после авторизации)
+const savedPos = localStorage.getItem("qp_map_pos");
+if (savedPos) {
+    try {
+        const p = JSON.parse(savedPos);
+        map.setView([p.lat, p.lon], p.zoom);
+        localStorage.removeItem("qp_map_pos");
+    } catch (e) {}
+}
+
+// Локализация инструментов рисования на русском
+L.drawLocal.draw.toolbar.buttons.polygon = "Выбрать область многоугольником";
+L.drawLocal.draw.toolbar.buttons.rectangle = "Выбрать область прямоугольником";
+L.drawLocal.draw.handlers.polygon.tooltip.start = "Кликайте, чтобы рисовать многоугольник";
+L.drawLocal.draw.handlers.polygon.tooltip.cont = "Кликайте, чтобы продолжить рисование";
+L.drawLocal.draw.handlers.polygon.tooltip.end = "Кликните первую точку, чтобы завершить";
+L.drawLocal.draw.handlers.rectangle.tooltip.start = "Зажмите мышь и тяните, чтобы выделить прямоугольник";
+L.drawLocal.edit.toolbar.buttons.edit = "Редактировать область";
+L.drawLocal.edit.toolbar.buttons.editDisabled = "Нет областей для редактирования";
+L.drawLocal.edit.toolbar.buttons.remove = "Удалить область";
+L.drawLocal.edit.toolbar.buttons.removeDisabled = "Нет областей для удаления";
+L.drawLocal.draw.toolbar.actions.title = "Отменить рисование";
+L.drawLocal.draw.toolbar.actions.text = "Отмена";
+L.drawLocal.draw.toolbar.finish.title = "Завершить рисование";
+L.drawLocal.draw.toolbar.finish.text = "Готово";
+L.drawLocal.draw.toolbar.undo.title = "Удалить последнюю точку";
+L.drawLocal.draw.toolbar.undo.text = "Удалить последнюю точку";
 const drawnItems = new L.FeatureGroup();
 map.addLayer(drawnItems);
 const drawControl = new L.Control.Draw({
@@ -362,80 +516,6 @@ document.getElementById("search-input").addEventListener("input", e => {
     }, 400);
 });
 
-
-// ========== PRO АНАЛИЗ (через Apify) ==========
-async function analyzeAreaPro() {
-    if (!state.bbox) { addBotMessage("⚠ Сначала выделите область"); return; }
-
-    // Заглушка проверки PRO статуса (потом подключим к Supabase)
-    const isPro = currentUser && (localStorage.getItem("is_pro_" + currentUser.id) === "1");
-
-    if (!isPro && !currentUser) {
-        addBotMessage("💎 Премиум-анализ доступен после входа в аккаунт.");
-        toggleAuth();
-        return;
-    }
-
-    if (!isPro) {
-        // Временный режим для тестирования - даём всем зарегистрированным
-        const allowTest = confirm("💎 Премиум-анализ\n\nЭто платная функция (~$0.4 за анализ). На этапе тестирования она бесплатна.\n\nЗапустить?");
-        if (!allowTest) return;
-    }
-
-    const btn = document.getElementById("analyze-pro-btn");
-    btn.disabled = true;
-    btn.innerHTML = '<i data-lucide="loader"></i> Парсим...';
-    lucide.createIcons();
-
-    state.reportCache = null;
-    state.scrapedData = [];
-    state.scrapeRunId = null;
-    state.organizations = [];
-    if (state.heatLayer) { map.removeLayer(state.heatLayer); state.heatLayer = null; }
-    if (state.markersLayer) { map.removeLayer(state.markersLayer); state.markersLayer = null; }
-    if (state.scrapedMarkersLayer) { map.removeLayer(state.scrapedMarkersLayer); state.scrapedMarkersLayer = null; }
-    trackRequest();
-
-    addBotMessage("🔄 Запуск премиум-парсинга Яндекс.Карт...");
-
-    try {
-        const allCats = ["Еда", "Здоровье", "Шопинг", "Красота", "Спорт", "Образование", "Досуг", "Авто", "Финансы", "Услуги", "Госучреждения"];
-        const r = await fetch("/api/scrape/start", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                bbox: state.bbox,
-                categories: allCats,
-                max_results: 100,
-                enrich_data: false
-            })
-        });
-        const d = await r.json();
-        if (d.detail === "PRO_REQUIRED") {
-            addBotMessage("💎 Требуется PRO-подписка");
-            return;
-        }
-        if (!d.run_id) {
-            addBotMessage("✗ Ошибка: " + (d.detail || "unknown"));
-            return;
-        }
-
-        if (d.from_cache) {
-            addBotMessage("⚡ Данные из кеша (возраст: " + (d.cache_age_min || 0) + " мин) — мгновенно!");
-        }
-
-        state.scrapeRunId = d.run_id;
-        pollProAnalyze(d.run_id);
-    } catch (e) {
-        addBotMessage("✗ " + e.message);
-    } finally {
-        setTimeout(() => {
-            btn.disabled = false;
-            btn.innerHTML = '<i data-lucide="sparkles"></i> Премиум-анализ <span class="btn-tag tag-pro">PRO</span>';
-            lucide.createIcons();
-        }, 2000);
-    }
-}
 
 function pollProAnalyze(runId) {
     let attempts = 0;
@@ -606,55 +686,6 @@ function calculateApifyScores(items) {
 }
 
 
-// ========== ANALYZE ==========
-async function analyzeArea() {
-    if (!state.bbox) return;
-    const btn = document.getElementById("analyze-btn");
-    btn.disabled = true; btn.innerHTML = '<i data-lucide="loader"></i> Анализ...';
-    lucide.createIcons();
-    state.reportCache = null;
-    state.scrapedData = []; state.scrapeRunId = null;
-    if (state.scrapedMarkersLayer) { map.removeLayer(state.scrapedMarkersLayer); state.scrapedMarkersLayer = null; }
-    trackRequest();
-    try {
-        const r = await fetch("/api/analyze", {
-            method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ bbox: state.bbox })
-        });
-        const data = await r.json();
-        if (data.error) { addBotMessage("⚠ " + data.error); return; }
-        state.organizations = data.organizations;
-        state.scores = data.scores;
-        state.categories = data.categories;
-        state.orgText = data.org_text;
-        state.activeFilter = null;
-        if (state.heatLayer) map.removeLayer(state.heatLayer);
-        const filtered = data.organizations.filter(o => isInsideDrawn(o.lat, o.lon));
-        if (filtered.length > 0) {
-            state.heatLayer = L.heatLayer(filtered.map(o => [o.lat, o.lon, 1]), {
-                radius: 22, blur: 18,
-                gradient: { 0.2: "#7c5cff", 0.5: "#a472ff", 0.7: "#d68aff", 1: "#ff8eb8" }
-            }).addTo(map);
-        }
-        renderFilteredMarkers();
-        showScores(data.scores);
-        const namedCount = data.organizations.length;
-        const totalCount = data.scores.total_places;
-        const hiddenCount = totalCount - namedCount;
-        let msg = "✓ Индекс: " + data.scores.overall + "/100\nИменованных мест: " + namedCount;
-        if (hiddenCount > 0) msg += "\n(скрыто " + hiddenCount + " безымянных)";
-        msg += "\n\nКликайте по метрикам слева для фильтра\nНажмите «Парсить отзывы» для данных с Яндекс.Карт";
-        addBotMessage(msg);
-        document.getElementById("report-btn").style.display = "inline-flex";
-        document.getElementById("scrape-btn").style.display = "inline-flex";
-        document.getElementById("quick-questions").style.display = "flex";
-    } catch (e) { addBotMessage("✗ " + e.message); }
-    finally {
-        btn.disabled = false;
-        btn.innerHTML = '<i data-lucide="activity"></i> Анализировать';
-        lucide.createIcons();
-    }
-}
 
 // ========== FILTERS ==========
 const CAT_MAP = {
@@ -782,27 +813,52 @@ async function generateReport() {
         document.getElementById("report-modal").style.display = "flex";
         return;
     }
-    btn.disabled = true; btn.innerHTML = '<i data-lucide="loader"></i> Генерация...'; lucide.createIcons();
+    btn.disabled = true;
+    btn.innerHTML = '<i data-lucide="loader" class="spinning"></i> Генерация...';
+    lucide.createIcons();
     trackRequest();
+    
     try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 95000); // 95 сек таймаут
+        
         const r = await fetch("/api/report", {
-            method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ org_text: state.orgText, scores: state.scores, scraped_data: state.scrapedData || [] })
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                org_text: state.orgText || "",
+                scores: state.scores || {},
+                scraped_data: state.scrapedData || []
+            }),
+            signal: controller.signal
         });
-        if (!r.ok) { addBotMessage("✗ Ошибка " + r.status); return; }
+        clearTimeout(timeoutId);
+        
+        if (!r.ok) {
+            const txt = await r.text();
+            addBotMessage("✗ Ошибка " + r.status + ": " + txt.substring(0, 200));
+            return;
+        }
         const data = await r.json();
         if (!data.report) { addBotMessage("✗ Пустой ответ"); return; }
         state.reportCache = data.report;
         document.getElementById("report-text").innerHTML = markdownToHtml(data.report);
         renderCharts();
         document.getElementById("report-modal").style.display = "flex";
-    } catch (e) { addBotMessage("✗ " + e.message); }
+    } catch (e) {
+        if (e.name === 'AbortError') {
+            addBotMessage("✗ Превышено время ожидания (>90 сек). AI перегружен, попробуйте ещё раз.");
+        } else {
+            addBotMessage("✗ " + e.message);
+        }
+    }
     finally {
         btn.disabled = false;
         btn.innerHTML = '<i data-lucide="file-text"></i> Полный отчёт';
         lucide.createIcons();
     }
 }
+
 function renderCharts() {
     const cats = state.categories, s = state.scores;
     const colors = ["#7c5cff", "#a472ff", "#d68aff", "#ff8eb8", "#feca57", "#48dbfb", "#1dd1a1", "#54a0ff", "#fd9644", "#20bf6b"];
@@ -856,47 +912,184 @@ async function exportPDF() {
     finally { btn.disabled = false; btn.innerHTML = '<i data-lucide="download"></i> PDF'; lucide.createIcons(); }
 }
 
-// ========== SCRAPER ==========
-let scrapingPollInterval = null;
-function openScrapeModal() {
-    if (!state.bbox) { addBotMessage("⚠ Сначала выделите область"); return; }
+// ========== ЕДИНОЕ ОКНО НАСТРОЕК АНАЛИЗА ==========
+function openAnalyzeModal(mode) {
+    if (!state.bbox) {
+        addBotMessage("⚠ Сначала выделите область на карте");
+        return;
+    }
+    
+    const isPro = mode === 'pro';
     const cats = ["Еда", "Здоровье", "Шопинг", "Красота", "Спорт", "Образование", "Досуг", "Авто", "Финансы", "Услуги"];
-    let html = '<button class="modal-close" onclick="closeProfile()">×</button>';
-    html += '<h2>Парсинг отзывов</h2><p>Реальные заведения с Яндекс.Карт</p>';
-    html += '<div style="text-align:left;background:var(--secondary);padding:12px;border-radius:10px;margin-bottom:12px">';
+    
+    let html = '<button class="modal-close" onclick="closeAnalyzeModal()">×</button>';
+    html += '<h2>' + (isPro ? '💎 Премиум-анализ' : '⚡ Быстрый анализ') + '</h2>';
+    html += '<p>' + (isPro ? 'Свежие данные с Яндекс.Карт' : 'Данные из OpenStreetMap (бесплатно)') + '</p>';
+    
+    if (isPro) {
+        html += '<div class="opt-section"><h3>Глубина анализа</h3>';
+        html += '<div class="opt-toggle">';
+        html += '<button class="opt-toggle-btn active" id="depth-basic" onclick="selectDepth(\\'basic\\')">';
+        html += 'Обычный<span class="opt-desc">Названия + рейтинги (1-3 мин)</span>';
+        html += '</button>';
+        html += '<button class="opt-toggle-btn" id="depth-ai" onclick="selectDepth(\\'ai\\')">';
+        html += 'AI-анализ отзывов<span class="opt-desc">Саммари отзывов (5-10 мин)</span>';
+        html += '</button>';
+        html += '</div></div>';
+    }
+    
+    html += '<div class="opt-section"><h3>Категории</h3>';
+    html += '<div class="opt-cat-grid">';
     cats.forEach((c, i) => {
-        html += '<label style="display:flex;align-items:center;padding:4px 0;cursor:pointer;font-size:13px">';
-        html += '<input type="checkbox" name="scrape-cat" value="' + c + '" ' + (i < 3 ? 'checked' : '') + ' style="margin-right:10px"> ' + c + '</label>';
+        html += '<label><input type="checkbox" name="cat-opt" value="' + c + '" ' + (i < 5 ? 'checked' : '') + '> ' + c + '</label>';
     });
-    html += '</div>';
-    html += '<label style="display:flex;align-items:center;padding:10px;background:var(--primary-soft);border-radius:10px;margin-bottom:12px;cursor:pointer">';
-    html += '<input type="checkbox" id="enrich-data" style="margin-right:10px">';
-    html += '<span style="text-align:left"><b>AI-анализ отзывов</b><br><span style="font-size:11px;color:var(--muted-fg)">Дольше, но отчёт детальнее</span></span></label>';
-    html += '<button class="btn-primary" onclick="startScraping()">Запустить</button>';
-    document.getElementById("profile-content").innerHTML = html;
-    document.getElementById("profile-modal").style.display = "flex";
+    html += '</div></div>';
+    
+    html += '<button class="btn-primary" onclick="runAnalysis(\\'' + mode + '\\')">Запустить анализ</button>';
+    
+    document.getElementById("analyze-modal-content").innerHTML = html;
+    document.getElementById("analyze-modal").style.display = "flex";
+    
+    // Запоминаем выбор глубины
+    window._analyzeDepth = "basic";
 }
-async function startScraping() {
-    const checked = Array.from(document.querySelectorAll('input[name="scrape-cat"]:checked')).map(x => x.value);
-    if (checked.length === 0) { alert("Выберите категорию"); return; }
-    const enrich = document.getElementById("enrich-data")?.checked || false;
-    closeProfile();
-    addBotMessage(enrich ? "🔄 AI-анализ отзывов запущен (5-10 мин)" : "🔄 Парсинг запущен (1-3 мин)");
+
+function closeAnalyzeModal() {
+    document.getElementById("analyze-modal").style.display = "none";
+}
+
+function selectDepth(d) {
+    window._analyzeDepth = d;
+    document.getElementById("depth-basic").classList.toggle("active", d === "basic");
+    document.getElementById("depth-ai").classList.toggle("active", d === "ai");
+}
+
+async function runAnalysis(mode) {
+    const checked = Array.from(document.querySelectorAll('input[name="cat-opt"]:checked')).map(x => x.value);
+    if (checked.length === 0) { alert("Выберите хотя бы одну категорию"); return; }
+    
+    closeAnalyzeModal();
+    
+    state.reportCache = null;
+    state.scrapedData = [];
+    state.scrapeRunId = null;
+    state.organizations = [];
+    if (state.heatLayer) { map.removeLayer(state.heatLayer); state.heatLayer = null; }
+    if (state.markersLayer) { map.removeLayer(state.markersLayer); state.markersLayer = null; }
+    if (state.scrapedMarkersLayer) { map.removeLayer(state.scrapedMarkersLayer); state.scrapedMarkersLayer = null; }
+    trackRequest();
+    
+    if (mode === 'free') {
+        await runFreeAnalysis(checked);
+    } else {
+        await runProAnalysis(checked, window._analyzeDepth === 'ai');
+    }
+}
+
+async function runFreeAnalysis(categories) {
+    const btn = document.getElementById("analyze-btn");
+    btn.disabled = true;
+    btn.innerHTML = '<i data-lucide="loader" class="spinning"></i> Анализ...';
+    lucide.createIcons();
+    addBotMessage("🔄 Загружаю данные из OpenStreetMap...");
+    
+    try {
+        const r = await fetch("/api/analyze", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ bbox: state.bbox })
+        });
+        const data = await r.json();
+        if (data.error) { addBotMessage("⚠ " + data.error); return; }
+        
+        state.organizations = data.organizations;
+        state.scores = data.scores;
+        state.categories = data.categories;
+        state.orgText = data.org_text;
+        state.activeFilter = null;
+        
+        if (state.heatLayer) map.removeLayer(state.heatLayer);
+        const filtered = data.organizations.filter(o => isInsideDrawn(o.lat, o.lon));
+        if (filtered.length > 0) {
+            state.heatLayer = L.heatLayer(filtered.map(o => [o.lat, o.lon, 1]), {
+                radius: 22, blur: 18,
+                gradient: { 0.2: "#7c5cff", 0.5: "#a472ff", 0.7: "#d68aff", 1: "#ff8eb8" }
+            }).addTo(map);
+        }
+        renderFilteredMarkers();
+        showScores(data.scores);
+        
+        const namedCount = data.organizations.length;
+        const hiddenCount = data.scores.total_places - namedCount;
+        let msg = "✓ Индекс: " + data.scores.overall + "/100\nИменованных мест: " + namedCount;
+        if (hiddenCount > 0) msg += "\n(скрыто " + hiddenCount + " безымянных)";
+        msg += "\n\nКликайте по метрикам слева для фильтра";
+        addBotMessage(msg);
+        
+        saveToHistory("free", filtered.length, data.scores.overall);
+        document.getElementById("report-btn").style.display = "inline-flex";
+        document.getElementById("quick-questions").style.display = "flex";
+    } catch (e) { addBotMessage("✗ " + e.message); }
+    finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i data-lucide="activity"></i> Анализ <span class="btn-tag tag-free">FREE</span>';
+        lucide.createIcons();
+    }
+}
+
+async function runProAnalysis(categories, enrichData) {
+    const isPro = currentUser && (localStorage.getItem("is_pro_" + currentUser.id) === "1");
+    if (!isPro && !currentUser) {
+        addBotMessage("💎 Премиум-анализ доступен после входа.");
+        toggleAuth();
+        return;
+    }
+    if (!isPro) {
+        const ok = confirm("💎 Премиум-анализ (~$0.4-1 за запрос).\nНа этапе тестирования бесплатно.\nЗапустить?");
+        if (!ok) return;
+    }
+    
+    const btn = document.getElementById("analyze-pro-btn");
+    btn.disabled = true;
+    btn.innerHTML = '<i data-lucide="loader" class="spinning"></i> Парсим...';
+    lucide.createIcons();
+    
+    const msg = enrichData ? "🤖 AI-анализ отзывов (5-10 мин)..." : "🔄 Парсинг Яндекс.Карт (1-3 мин)...";
+    addBotMessage(msg);
+    
     try {
         const r = await fetch("/api/scrape/start", {
-            method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ bbox: state.bbox, categories: checked, max_results: enrich ? 60 : 100, enrich_data: enrich })
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                bbox: state.bbox,
+                categories: categories,
+                max_results: enrichData ? 60 : 100,
+                enrich_data: enrichData
+            })
         });
         const d = await r.json();
         if (!d.run_id) { addBotMessage("✗ Ошибка: " + (d.detail || "unknown")); return; }
-        state.scrapeRunId = d.run_id; state.scrapeEnriched = enrich;
-        pollScrapeStatus(d.run_id);
+        if (d.from_cache) addBotMessage("⚡ Из кеша (" + (d.cache_age_min || 0) + " мин)");
+        state.scrapeRunId = d.run_id;
+        state.scrapeEnriched = enrichData;
+        pollProAnalyze(d.run_id);
     } catch (e) { addBotMessage("✗ " + e.message); }
+    finally {
+        setTimeout(() => {
+            btn.disabled = false;
+            btn.innerHTML = '<i data-lucide="sparkles"></i> Премиум-анализ <span class="btn-tag tag-pro">PRO</span>';
+            lucide.createIcons();
+        }, 2000);
+    }
 }
-function pollScrapeStatus(runId) {
+
+// pollProAnalyze оставляем как было
+function pollProAnalyze(runId) {
     let attempts = 0;
     const max = state.scrapeEnriched ? 80 : 36;
     if (scrapingPollInterval) clearInterval(scrapingPollInterval);
+    const interval = runId.startsWith("cached_") ? 100 : 10000;
     scrapingPollInterval = setInterval(async () => {
         attempts++;
         if (attempts > max) { clearInterval(scrapingPollInterval); addBotMessage("⏱ Таймаут"); return; }
@@ -905,24 +1098,20 @@ function pollScrapeStatus(runId) {
             const d = await r.json();
             if (d.status === "SUCCEEDED") {
                 clearInterval(scrapingPollInterval);
-                state.scrapedData = d.data || [];
-                state.reportCache = null;
-                renderScrapedMarkers();
-                let msg = "✓ Готово! " + (d.total || 0) + " заведений";
-                if (d.with_summary) msg += " (AI-саммари: " + d.with_summary + ")";
-                msg += "\n\nОткройте отчёт — теперь он с конкретикой по местам.";
-                addBotMessage(msg);
+                processApifyResults(d.data || [], d.from_cache);
+                saveToHistory(state.scrapeEnriched ? "pro+ai" : "pro", (d.data || []).length, state.scores.overall);
             } else if (["FAILED", "ABORTED", "TIMED-OUT"].includes(d.status)) {
                 clearInterval(scrapingPollInterval);
-                addBotMessage("✗ " + d.status);
+                addBotMessage("✗ Парсинг не удался");
             } else {
                 if (attempts === 3) addBotMessage("⏳ Парсим...");
                 if (attempts === 12) addBotMessage("⏳ Ещё парсим...");
                 if (attempts === 30) addBotMessage("⏳ AI обрабатывает...");
             }
         } catch (e) {}
-    }, 10000);
+    }, interval);
 }
+
 function renderScrapedMarkers() {
     if (state.scrapedMarkersLayer) map.removeLayer(state.scrapedMarkersLayer);
     state.scrapedMarkersLayer = L.layerGroup();
@@ -982,28 +1171,58 @@ async function sendMessage() {
     if (!t) return;
     i.value = ""; setChatBusy(true); addUserMessage(t); addLoading(); trackRequest();
     try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 95000);
         const r = await fetch("/api/chat", {
             method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ question: t, org_text: state.orgText, scores: state.scores, history: state.chatHistory.slice(-6) })
+            body: JSON.stringify({
+                question: t,
+                org_text: state.orgText || "",
+                scores: state.scores || {},
+                history: state.chatHistory.slice(-6)
+            }),
+            signal: controller.signal
         });
+        clearTimeout(timeoutId);
         const d = await r.json();
-        removeLoading(); addBotMessage(d.answer);
-    } catch (e) { removeLoading(); addBotMessage("✗ " + e.message); }
+        removeLoading();
+        addBotMessage(d.answer || "Пустой ответ");
+    } catch (e) {
+        removeLoading();
+        if (e.name === 'AbortError') addBotMessage("⏱ Таймаут AI");
+        else addBotMessage("✗ " + e.message);
+    }
     finally { setChatBusy(false); }
 }
+
 async function askQuick(q) {
     if (!q || state.chatBusy) return;
     setChatBusy(true); addUserMessage(q); addLoading(); trackRequest();
     try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 95000);
         const r = await fetch("/api/chat", {
             method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ question: q, org_text: state.orgText, scores: state.scores, history: state.chatHistory.slice(-6) })
+            body: JSON.stringify({
+                question: q,
+                org_text: state.orgText || "",
+                scores: state.scores || {},
+                history: state.chatHistory.slice(-6)
+            }),
+            signal: controller.signal
         });
+        clearTimeout(timeoutId);
         const d = await r.json();
-        removeLoading(); addBotMessage(d.answer);
-    } catch (e) { removeLoading(); addBotMessage("✗ " + e.message); }
+        removeLoading();
+        addBotMessage(d.answer || "Пустой ответ");
+    } catch (e) {
+        removeLoading();
+        if (e.name === 'AbortError') addBotMessage("⏱ Таймаут AI");
+        else addBotMessage("✗ " + e.message);
+    }
     finally { setChatBusy(false); }
 }
+
 document.getElementById("chat-input").addEventListener("keypress", e => { if (e.key === "Enter" && !state.chatBusy) sendMessage(); });
 document.addEventListener("click", e => { if (!e.target.closest(".search-box")) document.getElementById("search-results").innerHTML = ""; });
 
