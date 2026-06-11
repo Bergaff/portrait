@@ -94,9 +94,10 @@ async def analyze(req: AnalyzeRequest):
         amenity = tags.get("amenity", tags.get("shop", tags.get("leisure", "другое")))
         orgs.append({"name": name, "amenity": amenity, "lat": el["lat"], "lon": el["lon"]})
         lines.append("- " + name + ": " + amenity)
+    # ИСПРАВЛЕНИЕ: реальный перенос строки вместо литерала
     return {
         "organizations": orgs,
         "scores": scores,
         "categories": cats,
-        "org_text": "\\n".join(lines)
+        "org_text": "\n".join(lines[:200])
     }
