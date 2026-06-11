@@ -6,14 +6,36 @@ router = APIRouter()
 
 YANDEX_GEOCODER_KEY = os.environ.get("YANDEX_GEOCODER_KEY", "")
 
+@router.get("/debug/geocoder")
+async def debug_geocoder():
+    """Проверка что ключ загружен и работает"""
+    result = {
+        "key_present": bool(YANDEX_GEOCODER_KEY),
+        "key_length": len(YANDEX_GEOCODER_KEY) if YANDEX_GEOCODER_KEY else 0,
+        "key_preview": (YANDEX_GEOCODER_KEY[:8] + "...") if YANDEX_GEOCODER_KEY else "MISSING"
+    }
+    if YANDEX_GEOCODER_KEY:
+        try:
+            r = requests.get(
+                "https://geocode-maps.yandex.ru/1.x/",
+                params={"apikey": YANDEX_GEOCODER_KEY, "geocode": "Москва Тверская", "format": "json"},
+                timeout=8
+            )
+            result["status_code"] = r.status_code
+            result["response_preview"] = r.text[:500]
+        except Exception as e:
+            result["error"] = str(e)
+    return result
+
 @router.get("/search")
 async def search_address(q: str):
     if not q or len(q) < 2:
         return {"results": []}
-
+    
     results = []
+    debug_info = []
 
-    # 1. ЯНДЕКС ГЕОКОДЕР — основной (лучший для РФ/СНГ)
+    # 1. ЯНДЕКС ГЕОКОДЕР
     if YANDEX_GEOCODER_KEY:
         try:
             r = requests.get(
@@ -27,9 +49,11 @@ async def search_address(q: str):
                 },
                 timeout=8
             )
+            debug_info.append(f"yandex_status={r.status_code}")
             if r.status_code == 200:
                 data = r.json()
                 members = data.get("response", {}).get("GeoObjectCollection", {}).get("featureMember", [])
+                debug_info.append(f"yandex_count={len(members)}")
                 for m in members:
                     obj = m.get("GeoObject", {})
                     name = obj.get("name", "")
@@ -45,9 +69,16 @@ async def search_address(q: str):
                                 "lon": float(coords[0])
                             })
                 if results:
+                    print("SEARCH:", q, "→", len(results), "via Yandex")
                     return {"results": results, "source": "yandex"}
+            else:
+                # Лог ошибки в консоль Railway
+                print("YANDEX GEOCODER ERROR " + str(r.status_code) + ": " + r.text[:300])
         except Exception as e:
-            print("Yandex geocoder error:", e)
+            print("YANDEX EXCEPTION:", str(e))
+            debug_info.append(f"yandex_exc={str(e)[:50]}")
+    else:
+        debug_info.append("yandex_key_missing")
 
     # 2. PHOTON — fallback
     try:
@@ -70,16 +101,16 @@ async def search_address(q: str):
                 if display:
                     results.append({"display_name": display[:100], "lat": float(coords[1]), "lon": float(coords[0])})
             if results:
-                return {"results": results, "source": "photon"}
+                return {"results": results, "source": "photon", "debug": debug_info}
     except Exception as e:
-        print("Photon error:", e)
+        debug_info.append(f"photon_exc={str(e)[:50]}")
 
-    # 3. NOMINATIM — последний fallback
+    # 3. NOMINATIM
     try:
         r2 = requests.get(
             "https://nominatim.openstreetmap.org/search",
             params={"q": q, "format": "json", "limit": 7, "accept-language": "ru"},
-            headers={"User-Agent": "QuarterPortrait/1.0 contact@example.com"},
+            headers={"User-Agent": "QuarterPortrait/1.0"},
             timeout=8
         )
         if r2.status_code == 200:
@@ -89,7 +120,7 @@ async def search_address(q: str):
                     "lat": float(item.get("lat", 0)),
                     "lon": float(item.get("lon", 0))
                 })
-    except Exception as e:
-        print("Nominatim error:", e)
+    except:
+        pass
 
-    return {"results": results, "source": "nominatim"}
+    return {"results": results, "source": "fallback", "debug": debug_info}
