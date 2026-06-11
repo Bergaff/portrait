@@ -4,14 +4,12 @@ import requests
 import os
 import time
 import hashlib
-from urllib.parse import quote
 
 router = APIRouter()
 
 APIFY_TOKEN = os.environ.get("APIFY_TOKEN", "")
 ACTOR_ID = "fRSgBvgbsRB4o7t30"
 
-# КЕШ
 CACHE = {}
 CACHE_TTL = 6 * 3600
 CACHE_MAX_SIZE = 200
@@ -64,44 +62,26 @@ def reverse_geocode(lat, lon):
         pass
     return ""
 
-def build_yandex_search_urls(queries, center_lat, center_lon, span_lat, span_lon):
-    """
-    Строим прямые URL поиска Яндекс.Карт с точными координатами области.
-    Это работает намного точнее, чем location + coordinates.
-    """
-    urls = []
-    # Подбираем zoom по размеру span (примерно)
-    if max(span_lat, span_lon) > 0.05:
-        zoom = 14
-    elif max(span_lat, span_lon) > 0.02:
-        zoom = 15
-    elif max(span_lat, span_lon) > 0.01:
-        zoom = 16
-    else:
-        zoom = 17
-
-    for q in queries:
-        url = (
-            "https://yandex.ru/maps/?text=" + quote(q) +
-            "&ll=" + str(center_lon) + "%2C" + str(center_lat) +
-            "&z=" + str(zoom) +
-            "&spn=" + str(span_lon) + "%2C" + str(span_lat)
-        )
-        urls.append({"url": url})
-    return urls
+def is_inside_bbox(lat, lon, bbox_str, buffer_pct=0.0):
+    try:
+        south, west, north, east = [float(x) for x in bbox_str.split(",")]
+        buf_lat = (north - south) * buffer_pct
+        buf_lon = (east - west) * buffer_pct
+        return (south - buf_lat <= lat <= north + buf_lat and
+                west - buf_lon <= lon <= east + buf_lon)
+    except:
+        return True
 
 @router.post("/scrape/start")
 async def start_scrape(req: ScrapeRequest):
     if not APIFY_TOKEN:
         raise HTTPException(status_code=500, detail="APIFY_TOKEN not set")
 
-    # КЕШ
     cache_key = make_cache_key(req.bbox, req.categories, req.enrich_data)
     if cache_key in CACHE:
         cached = CACHE[cache_key]
         age = time.time() - cached.get("timestamp", 0)
         if age < CACHE_TTL:
-            print("CACHE HIT " + cache_key[:8])
             return {
                 "run_id": "cached_" + cache_key,
                 "status": "CACHED",
@@ -114,31 +94,28 @@ async def start_scrape(req: ScrapeRequest):
         south, west, north, east = [float(x) for x in req.bbox.split(",")]
     except:
         raise HTTPException(status_code=400, detail="Bad bbox")
-
+    
     center_lat = (south + north) / 2
     center_lon = (west + east) / 2
-    # СУЖАЕМ span - актор всё равно "размывает" поиск, лучше дать жёстче
-    span_lat = abs(north - south) * 0.8
-    span_lon = abs(east - west) * 0.8
+    span_lat = abs(north - south)
+    span_lon = abs(east - west)
 
     city = reverse_geocode(center_lat, center_lon) or ""
 
-    # Формируем запросы (БЕЗ названия города! город уже задан координатами)
     queries = []
     for cat in req.categories:
         if cat in CATEGORY_QUERIES:
             queries.extend(CATEGORY_QUERIES[cat])
     if not queries:
         raise HTTPException(status_code=400, detail="No categories")
-    queries = list(dict.fromkeys(queries))[:4]  # макс 4 запроса (экономим)
-
-    # СТРОИМ startUrls с координатами в URL Яндекса
-    start_urls = build_yandex_search_urls(queries, center_lat, center_lon, span_lat, span_lon)
+    queries = list(dict.fromkeys(queries))[:4]
 
     safe_limit = 60 if req.enrich_data else 100
-
+    
     actor_input = {
-        "startUrls": start_urls,
+        "query": queries,
+        "coordinates": str(center_lon) + "," + str(center_lat),
+        "viewportSpan": str(span_lon) + "," + str(span_lat),
         "maxResults": min(req.max_results, safe_limit),
         "language": "ru",
         "includeReviews": False,
@@ -155,11 +132,10 @@ async def start_scrape(req: ScrapeRequest):
     )
     if response.status_code not in (200, 201):
         raise HTTPException(status_code=500, detail="Apify: " + response.text[:300])
-
+    
     run_data = response.json().get("data", {})
     run_id = run_data.get("id")
-
-    # Сохраняем bbox для последующей фильтрации на бэкенде
+    
     if run_id:
         CACHE["__pending_" + run_id] = {
             "cache_key": cache_key,
@@ -175,24 +151,11 @@ async def start_scrape(req: ScrapeRequest):
         "from_cache": False
     }
 
-def is_inside_bbox(lat, lon, bbox_str):
-    """Проверяем что точка внутри bbox"""
-    try:
-        south, west, north, east = [float(x) for x in bbox_str.split(",")]
-        # Небольшой буфер 10% для пограничных точек
-        buf_lat = (north - south) * 0.1
-        buf_lon = (east - west) * 0.1
-        return (south - buf_lat <= lat <= north + buf_lat and
-                west - buf_lon <= lon <= east + buf_lon)
-    except:
-        return True
-
 @router.get("/scrape/status/{run_id}")
 async def check_status(run_id: str):
     if not APIFY_TOKEN:
         raise HTTPException(status_code=500, detail="APIFY_TOKEN not set")
 
-    # Кеш
     if run_id.startswith("cached_"):
         cache_key = run_id.replace("cached_", "")
         if cache_key in CACHE:
@@ -221,13 +184,12 @@ async def check_status(run_id: str):
         )
         if items_resp.status_code == 200:
             items = items_resp.json()
-
-            # Получаем bbox из pending для фильтрации
+            
             pending_key = "__pending_" + run_id
             bbox_filter = None
             if pending_key in CACHE:
                 bbox_filter = CACHE[pending_key].get("bbox")
-
+            
             aggregated = []
             outside_count = 0
             for item in items:
@@ -236,18 +198,17 @@ async def check_status(run_id: str):
                     ai_summary = item["aiReviewSummary"][:400]
                 elif isinstance(item.get("reviewsSummary"), str):
                     ai_summary = item["reviewsSummary"][:400]
-
+                
                 lat = item.get("latitude")
                 lon = item.get("longitude")
                 name = item.get("title") or item.get("name", "")
                 if not name or not lat or not lon:
                     continue
-
-                # БЭКЕНД-ФИЛЬТР: оставляем только внутри bbox
-                if bbox_filter and not is_inside_bbox(lat, lon, bbox_filter):
+                
+                if bbox_filter and not is_inside_bbox(lat, lon, bbox_filter, buffer_pct=0.0):
                     outside_count += 1
                     continue
-
+                
                 aggregated.append({
                     "name": name,
                     "category": item.get("categoryName") or item.get("category", ""),
@@ -258,13 +219,12 @@ async def check_status(run_id: str):
                     "lon": lon,
                     "ai_summary": ai_summary
                 })
-
+            
             result["data"] = aggregated
             result["total"] = len(aggregated)
             result["filtered_out"] = outside_count
             result["with_summary"] = len([x for x in aggregated if x["ai_summary"]])
 
-            # Сохраняем в кеш
             if pending_key in CACHE:
                 cache_key = CACHE[pending_key]["cache_key"]
                 city = CACHE[pending_key]["city"]
@@ -276,7 +236,6 @@ async def check_status(run_id: str):
                 }
                 del CACHE[pending_key]
                 cleanup_cache()
-                print("CACHED " + cache_key[:8] + ": " + str(len(aggregated)) + " items, " + str(outside_count) + " filtered out")
 
     return result
 
