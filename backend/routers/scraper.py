@@ -79,7 +79,7 @@ def build_yandex_search_urls(queries, center_lat, center_lon, span_lat, span_lon
         zoom = 16
     else:
         zoom = 17
-    
+
     for q in queries:
         url = (
             "https://yandex.ru/maps/?text=" + quote(q) +
@@ -114,7 +114,7 @@ async def start_scrape(req: ScrapeRequest):
         south, west, north, east = [float(x) for x in req.bbox.split(",")]
     except:
         raise HTTPException(status_code=400, detail="Bad bbox")
-    
+
     center_lat = (south + north) / 2
     center_lon = (west + east) / 2
     # СУЖАЕМ span - актор всё равно "размывает" поиск, лучше дать жёстче
@@ -136,7 +136,7 @@ async def start_scrape(req: ScrapeRequest):
     start_urls = build_yandex_search_urls(queries, center_lat, center_lon, span_lat, span_lon)
 
     safe_limit = 60 if req.enrich_data else 100
-    
+
     actor_input = {
         "startUrls": start_urls,
         "maxResults": min(req.max_results, safe_limit),
@@ -155,10 +155,10 @@ async def start_scrape(req: ScrapeRequest):
     )
     if response.status_code not in (200, 201):
         raise HTTPException(status_code=500, detail="Apify: " + response.text[:300])
-    
+
     run_data = response.json().get("data", {})
     run_id = run_data.get("id")
-    
+
     # Сохраняем bbox для последующей фильтрации на бэкенде
     if run_id:
         CACHE["__pending_" + run_id] = {
@@ -221,13 +221,13 @@ async def check_status(run_id: str):
         )
         if items_resp.status_code == 200:
             items = items_resp.json()
-            
+
             # Получаем bbox из pending для фильтрации
             pending_key = "__pending_" + run_id
             bbox_filter = None
             if pending_key in CACHE:
                 bbox_filter = CACHE[pending_key].get("bbox")
-            
+
             aggregated = []
             outside_count = 0
             for item in items:
@@ -236,18 +236,18 @@ async def check_status(run_id: str):
                     ai_summary = item["aiReviewSummary"][:400]
                 elif isinstance(item.get("reviewsSummary"), str):
                     ai_summary = item["reviewsSummary"][:400]
-                
+
                 lat = item.get("latitude")
                 lon = item.get("longitude")
                 name = item.get("title") or item.get("name", "")
                 if not name or not lat or not lon:
                     continue
-                
+
                 # БЭКЕНД-ФИЛЬТР: оставляем только внутри bbox
                 if bbox_filter and not is_inside_bbox(lat, lon, bbox_filter):
                     outside_count += 1
                     continue
-                
+
                 aggregated.append({
                     "name": name,
                     "category": item.get("categoryName") or item.get("category", ""),
@@ -258,7 +258,7 @@ async def check_status(run_id: str):
                     "lon": lon,
                     "ai_summary": ai_summary
                 })
-            
+
             result["data"] = aggregated
             result["total"] = len(aggregated)
             result["filtered_out"] = outside_count
