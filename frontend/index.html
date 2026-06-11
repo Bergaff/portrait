@@ -41,7 +41,7 @@
         <header id="header">
             <div class="header-left">
                 <h1 class="header-title">Atlas Urban Analytics</h1>
-                <span class="header-badge">v1.4</span>
+                <span class="header-badge">v1.5</span>
             </div>
     <div class="header-right">
         <div class="search-box">
@@ -88,19 +88,16 @@
 
                 <!-- Действия -->
                 <div id="actions-panel" style="display:none;">
-                    <button id="analyze-btn" class="btn-primary" onclick="analyzeArea()">
-                        <i data-lucide="activity"></i> Анализ (быстрый)
+                    <button id="analyze-btn" class="btn-primary" onclick="openAnalyzeModal('free')">
+                        <i data-lucide="activity"></i> Анализ
                         <span class="btn-tag tag-free">FREE</span>
                     </button>
-                    <button id="analyze-pro-btn" class="btn-outline" onclick="analyzeAreaPro()">
+                    <button id="analyze-pro-btn" class="btn-outline" onclick="openAnalyzeModal('pro')">
                         <i data-lucide="sparkles"></i> Премиум-анализ
                         <span class="btn-tag tag-pro">PRO</span>
                     </button>
                     <button id="report-btn" class="btn-outline" style="display:none;" onclick="generateReport()">
-                        <i data-lucide="file-text"></i> Полный отчёт
-                    </button>
-                    <button id="scrape-btn" class="btn-outline" style="display:none;" onclick="openScrapeModal()">
-                        <i data-lucide="sparkles"></i> Парсить отзывы
+                        <i data-lucide="file-text" id="report-icon"></i> Полный отчёт
                     </button>
                 </div>
 
@@ -117,7 +114,7 @@
                     <div class="chat-section-header">
                         <i data-lucide="sparkles" class="spark-icon"></i>
                         <span>AI-урбанист</span>
-                        <span class="version-badge">v1.4</span>
+                        <span class="version-badge">v1.5</span>
                     </div>
                     <div id="chat-messages"></div>
                     <div class="chat-input-box">
@@ -195,6 +192,13 @@
                 <button class="btn-outline" onclick="closeConfirm()">Отмена</button>
             </div>
         </div>
+    </div>
+
+
+    <!-- Analyze Settings Modal -->
+    <div id="analyze-modal" style="display:none;">
+        <div class="modal-bg" onclick="closeAnalyzeModal()"></div>
+        <div class="modal-box" id="analyze-modal-content"></div>
     </div>
 
     <!-- Report Modal -->
