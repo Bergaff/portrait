@@ -68,11 +68,13 @@ def calculate_scores(elements, bbox):
     density = min(100, int(total/area/150*100))
     div_s = min(100, int(len(cats)/10*100))
     overall = int(density*0.15+food_s*0.2+health_s*0.15+sport_s*0.1+edu_s*0.1+shop_s*0.15+div_s*0.15)
+    poi_density = round(len(elements) / area, 1)
     return {
         "overall":overall,"density":density,"food":food_s,"health":health_s,
         "sport":sport_s,"education":edu_s,"shopping":shop_s,
         "entertainment":fun_s,"diversity":div_s,
-        "area_km2":round(area,3),"total_places":len(elements)
+        "area_km2":round(area,3),"total_places":len(elements),
+        "poi_density": poi_density
     }
 
 @router.post("/analyze")
