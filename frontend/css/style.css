@@ -120,10 +120,10 @@ body {
     border-radius: 8px; max-height: 320px; overflow-y: auto;
     z-index: 10000; box-shadow: 0 12px 40px rgba(0,0,0,0.6);
 }
-.search-box { 
-    position: relative; 
-    width: 280px; 
-    z-index: 10001; 
+.search-box {
+    position: relative;
+    width: 280px;
+    z-index: 10001;
 }
 .leaflet-pane { z-index: 100 !important; }
 .leaflet-top, .leaflet-bottom { z-index: 200 !important; }
