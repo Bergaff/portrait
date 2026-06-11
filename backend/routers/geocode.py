@@ -10,7 +10,7 @@ YANDEX_GEOCODER_KEY = os.environ.get("YANDEX_GEOCODER_KEY", "")
 async def search_address(q: str):
     if not q or len(q) < 2:
         return {"results": []}
-    
+
     results = []
 
     # 1. ЯНДЕКС ГЕОКОДЕР — основной (лучший для РФ/СНГ)
