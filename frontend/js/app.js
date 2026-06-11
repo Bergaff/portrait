@@ -181,38 +181,61 @@ function openProfile() {
     const d = new Date(currentUser.created_at).toLocaleDateString("ru-RU");
     const p = currentUser.app_metadata?.provider || "email";
     
-    let h = '<div class="profile-row"><span class="profile-label">Email</span><span>' + (currentUser.email || "—") + '</span></div>';
-    h += '<div class="profile-row"><span class="profile-label">Способ входа</span><span style="text-transform:capitalize">' + p + '</span></div>';
-    h += '<div class="profile-row"><span class="profile-label">Регистрация</span><span>' + d + '</span></div>';
-    h += '<div class="profile-row"><span class="profile-label">Запросов</span><span>' + userStats.requests + '</span></div>';
+    const container = document.getElementById("profile-content");
+    container.innerHTML = "";
+    
+    // Базовая информация
+    const info = document.createElement("div");
+    info.innerHTML = 
+        '<div class="profile-row"><span class="profile-label">Email</span><span>' + (currentUser.email || "—") + '</span></div>' +
+        '<div class="profile-row"><span class="profile-label">Способ входа</span><span style="text-transform:capitalize">' + p + '</span></div>' +
+        '<div class="profile-row"><span class="profile-label">Регистрация</span><span>' + d + '</span></div>' +
+        '<div class="profile-row"><span class="profile-label">Запросов</span><span>' + userStats.requests + '</span></div>';
+    container.appendChild(info);
     
     // История
     const history = JSON.parse(localStorage.getItem(getHistoryKey()) || "[]");
-    h += '<div style="margin-top:16px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">';
-    h += '<span class="profile-label" style="font-weight:600">История анализов (' + history.length + ')</span>';
+    
+    const histHeader = document.createElement("div");
+    histHeader.style.cssText = "margin-top:16px;display:flex;justify-content:space-between;align-items:center;margin-bottom:8px";
+    histHeader.innerHTML = '<span class="profile-label" style="font-weight:600">История анализов (' + history.length + ')</span>';
+    
     if (history.length > 0) {
-        h += '<button class="btn-ghost" style="font-size:11px;padding:3px 8px" onclick="clearHistory()">Очистить</button>';
+        const clearBtn = document.createElement("button");
+        clearBtn.className = "btn-ghost";
+        clearBtn.style.cssText = "font-size:11px;padding:3px 8px";
+        clearBtn.textContent = "Очистить";
+        clearBtn.onclick = clearHistory;
+        histHeader.appendChild(clearBtn);
     }
-    h += '</div>';
+    container.appendChild(histHeader);
     
     if (history.length === 0) {
-        h += '<div class="history-empty">Пока нет сохранённых анализов</div>';
+        const empty = document.createElement("div");
+        empty.className = "history-empty";
+        empty.textContent = "Пока нет сохранённых анализов";
+        container.appendChild(empty);
     } else {
-        h += '<div class="history-list">';
+        const list = document.createElement("div");
+        list.className = "history-list";
+        
         history.forEach((item, idx) => {
             const dt = new Date(item.date);
             const dtStr = dt.toLocaleDateString("ru-RU") + " " + dt.toLocaleTimeString("ru-RU", {hour:'2-digit', minute:'2-digit'});
             const modeIcon = item.mode === "free" ? "⚡" : item.mode === "pro+ai" ? "🤖" : "💎";
-            h += '<div class="history-item" onclick="loadFromHistory(' + idx + ')">';
-            h += '<div class="history-item-title">' + modeIcon + ' Индекс: ' + (item.score || "?") + '/100, мест: ' + (item.places || 0) + '</div>';
-            h += '<div class="history-item-meta"><span>' + dtStr + '</span><span>' + (item.mode || "free") + '</span></div>';
-            h += '</div>';
+            
+            const histItem = document.createElement("div");
+            histItem.className = "history-item";
+            histItem.innerHTML = 
+                '<div class="history-item-title">' + modeIcon + ' Индекс: ' + (item.score || "?") + '/100, мест: ' + (item.places || 0) + '</div>' +
+                '<div class="history-item-meta"><span>' + dtStr + '</span><span>' + (item.mode || "free") + '</span></div>';
+            histItem.onclick = function() { loadFromHistory(idx); };
+            list.appendChild(histItem);
         });
-        h += '</div>';
+        
+        container.appendChild(list);
     }
-    h += '</div>';
     
-    document.getElementById("profile-content").innerHTML = h;
     document.getElementById("profile-modal").style.display = "flex";
 }
 function closeProfile() { document.getElementById("profile-modal").style.display = "none"; }
@@ -229,9 +252,9 @@ function saveToHistory(mode, placesCount, score) {
     try {
         history = JSON.parse(localStorage.getItem(key) || "[]");
     } catch (e) {}
-    
+
     const center = state.drawnLayer ? state.drawnLayer.getBounds().getCenter() : null;
-    
+
     history.unshift({
         bbox: state.bbox,
         center: center ? [center.lat, center.lng] : null,
@@ -245,7 +268,7 @@ function saveToHistory(mode, placesCount, score) {
         categories: state.categories,
         date: new Date().toISOString()
     });
-    
+
     // Храним последние 20
     history = history.slice(0, 20);
     localStorage.setItem(key, JSON.stringify(history));
@@ -256,7 +279,7 @@ function loadFromHistory(idx) {
     const history = JSON.parse(localStorage.getItem(key) || "[]");
     if (!history[idx]) return;
     const h = history[idx];
-    
+
     state.bbox = h.bbox;
     state.scores = h.scores || {};
     state.organizations = h.organizations || [];
@@ -264,7 +287,7 @@ function loadFromHistory(idx) {
     state.orgText = h.orgText || "";
     state.categories = h.categories || {};
     state.reportCache = null;
-    
+
     // Перерисовываем bbox на карте
     drawnItems.clearLayers();
     if (h.bbox) {
@@ -276,12 +299,12 @@ function loadFromHistory(idx) {
         state.drawnLayer = rect;
         map.fitBounds(rect.getBounds());
     }
-    
+
     // Перерисовываем
     if (state.heatLayer) { map.removeLayer(state.heatLayer); }
     if (state.markersLayer) { map.removeLayer(state.markersLayer); }
     if (state.scrapedMarkersLayer) { map.removeLayer(state.scrapedMarkersLayer); }
-    
+
     if (state.organizations.length > 0) {
         state.heatLayer = L.heatLayer(
             state.organizations.filter(o => o.lat && o.lon).map(o => [o.lat, o.lon, 1]),
@@ -290,12 +313,12 @@ function loadFromHistory(idx) {
     }
     if (h.mode && h.mode.startsWith("pro")) renderApifyMarkers();
     else renderFilteredMarkers();
-    
+
     showScores(state.scores);
     document.getElementById("actions-panel").style.display = "flex";
     document.getElementById("report-btn").style.display = "inline-flex";
     document.getElementById("quick-questions").style.display = "flex";
-    
+
     closeProfile();
     addBotMessage("📂 Загружено из истории: " + new Date(h.date).toLocaleString("ru-RU"));
 }
@@ -817,11 +840,11 @@ async function generateReport() {
     btn.innerHTML = '<i data-lucide="loader" class="spinning"></i> Генерация...';
     lucide.createIcons();
     trackRequest();
-    
+
     try {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 95000); // 95 сек таймаут
-        
+
         const r = await fetch("/api/report", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -833,7 +856,7 @@ async function generateReport() {
             signal: controller.signal
         });
         clearTimeout(timeoutId);
-        
+
         if (!r.ok) {
             const txt = await r.text();
             addBotMessage("✗ Ошибка " + r.status + ": " + txt.substring(0, 200));
@@ -922,35 +945,83 @@ function openAnalyzeModal(mode) {
     const isPro = mode === 'pro';
     const cats = ["Еда", "Здоровье", "Шопинг", "Красота", "Спорт", "Образование", "Досуг", "Авто", "Финансы", "Услуги"];
     
-    let html = '<button class="modal-close" onclick="closeAnalyzeModal()">×</button>';
-    html += '<h2>' + (isPro ? '💎 Премиум-анализ' : '⚡ Быстрый анализ') + '</h2>';
-    html += '<p>' + (isPro ? 'Свежие данные с Яндекс.Карт' : 'Данные из OpenStreetMap (бесплатно)') + '</p>';
+    const container = document.getElementById("analyze-modal-content");
+    container.innerHTML = "";
     
+    // Кнопка закрытия
+    const closeBtn = document.createElement("button");
+    closeBtn.className = "modal-close";
+    closeBtn.textContent = "×";
+    closeBtn.onclick = closeAnalyzeModal;
+    container.appendChild(closeBtn);
+    
+    // Заголовок
+    const h2 = document.createElement("h2");
+    h2.textContent = isPro ? "💎 Премиум-анализ" : "⚡ Быстрый анализ";
+    container.appendChild(h2);
+    
+    const p = document.createElement("p");
+    p.textContent = isPro ? "Свежие данные с Яндекс.Карт" : "Данные из OpenStreetMap (бесплатно)";
+    container.appendChild(p);
+    
+    // Глубина (только для PRO)
     if (isPro) {
-        html += '<div class="opt-section"><h3>Глубина анализа</h3>';
-        html += '<div class="opt-toggle">';
-        html += '<button class="opt-toggle-btn active" id="depth-basic" onclick="selectDepth(\\'basic\\')">';
-        html += 'Обычный<span class="opt-desc">Названия + рейтинги (1-3 мин)</span>';
-        html += '</button>';
-        html += '<button class="opt-toggle-btn" id="depth-ai" onclick="selectDepth(\\'ai\\')">';
-        html += 'AI-анализ отзывов<span class="opt-desc">Саммари отзывов (5-10 мин)</span>';
-        html += '</button>';
-        html += '</div></div>';
+        const depthSection = document.createElement("div");
+        depthSection.className = "opt-section";
+        depthSection.innerHTML = '<h3>Глубина анализа</h3>';
+        
+        const toggle = document.createElement("div");
+        toggle.className = "opt-toggle";
+        
+        const btnBasic = document.createElement("button");
+        btnBasic.className = "opt-toggle-btn active";
+        btnBasic.id = "depth-basic";
+        btnBasic.innerHTML = 'Обычный<span class="opt-desc">Названия + рейтинги (1-3 мин)</span>';
+        btnBasic.onclick = function() { selectDepth("basic"); };
+        
+        const btnAi = document.createElement("button");
+        btnAi.className = "opt-toggle-btn";
+        btnAi.id = "depth-ai";
+        btnAi.innerHTML = 'AI-анализ отзывов<span class="opt-desc">Саммари отзывов (5-10 мин)</span>';
+        btnAi.onclick = function() { selectDepth("ai"); };
+        
+        toggle.appendChild(btnBasic);
+        toggle.appendChild(btnAi);
+        depthSection.appendChild(toggle);
+        container.appendChild(depthSection);
     }
     
-    html += '<div class="opt-section"><h3>Категории</h3>';
-    html += '<div class="opt-cat-grid">';
+    // Категории
+    const catSection = document.createElement("div");
+    catSection.className = "opt-section";
+    catSection.innerHTML = '<h3>Категории</h3>';
+    
+    const grid = document.createElement("div");
+    grid.className = "opt-cat-grid";
+    
     cats.forEach((c, i) => {
-        html += '<label><input type="checkbox" name="cat-opt" value="' + c + '" ' + (i < 5 ? 'checked' : '') + '> ' + c + '</label>';
+        const label = document.createElement("label");
+        const cb = document.createElement("input");
+        cb.type = "checkbox";
+        cb.name = "cat-opt";
+        cb.value = c;
+        cb.checked = i < 5;
+        label.appendChild(cb);
+        label.appendChild(document.createTextNode(" " + c));
+        grid.appendChild(label);
     });
-    html += '</div></div>';
     
-    html += '<button class="btn-primary" onclick="runAnalysis(\\'' + mode + '\\')">Запустить анализ</button>';
+    catSection.appendChild(grid);
+    container.appendChild(catSection);
     
-    document.getElementById("analyze-modal-content").innerHTML = html;
+    // Кнопка запуска
+    const runBtn = document.createElement("button");
+    runBtn.className = "btn-primary";
+    runBtn.textContent = "Запустить анализ";
+    runBtn.onclick = function() { runAnalysis(mode); };
+    container.appendChild(runBtn);
+    
     document.getElementById("analyze-modal").style.display = "flex";
-    
-    // Запоминаем выбор глубины
     window._analyzeDepth = "basic";
 }
 
@@ -960,8 +1031,10 @@ function closeAnalyzeModal() {
 
 function selectDepth(d) {
     window._analyzeDepth = d;
-    document.getElementById("depth-basic").classList.toggle("active", d === "basic");
-    document.getElementById("depth-ai").classList.toggle("active", d === "ai");
+    const basic = document.getElementById("depth-basic");
+    const ai = document.getElementById("depth-ai");
+    if (basic) basic.classList.toggle("active", d === "basic");
+    if (ai) ai.classList.toggle("active", d === "ai");
 }
 
 async function runAnalysis(mode) {
@@ -992,7 +1065,7 @@ async function runFreeAnalysis(categories) {
     btn.innerHTML = '<i data-lucide="loader" class="spinning"></i> Анализ...';
     lucide.createIcons();
     addBotMessage("🔄 Загружаю данные из OpenStreetMap...");
-    
+
     try {
         const r = await fetch("/api/analyze", {
             method: "POST",
@@ -1001,13 +1074,13 @@ async function runFreeAnalysis(categories) {
         });
         const data = await r.json();
         if (data.error) { addBotMessage("⚠ " + data.error); return; }
-        
+
         state.organizations = data.organizations;
         state.scores = data.scores;
         state.categories = data.categories;
         state.orgText = data.org_text;
         state.activeFilter = null;
-        
+
         if (state.heatLayer) map.removeLayer(state.heatLayer);
         const filtered = data.organizations.filter(o => isInsideDrawn(o.lat, o.lon));
         if (filtered.length > 0) {
@@ -1018,14 +1091,14 @@ async function runFreeAnalysis(categories) {
         }
         renderFilteredMarkers();
         showScores(data.scores);
-        
+
         const namedCount = data.organizations.length;
         const hiddenCount = data.scores.total_places - namedCount;
         let msg = "✓ Индекс: " + data.scores.overall + "/100\nИменованных мест: " + namedCount;
         if (hiddenCount > 0) msg += "\n(скрыто " + hiddenCount + " безымянных)";
         msg += "\n\nКликайте по метрикам слева для фильтра";
         addBotMessage(msg);
-        
+
         saveToHistory("free", filtered.length, data.scores.overall);
         document.getElementById("report-btn").style.display = "inline-flex";
         document.getElementById("quick-questions").style.display = "flex";
@@ -1048,15 +1121,15 @@ async function runProAnalysis(categories, enrichData) {
         const ok = confirm("💎 Премиум-анализ (~$0.4-1 за запрос).\nНа этапе тестирования бесплатно.\nЗапустить?");
         if (!ok) return;
     }
-    
+
     const btn = document.getElementById("analyze-pro-btn");
     btn.disabled = true;
     btn.innerHTML = '<i data-lucide="loader" class="spinning"></i> Парсим...';
     lucide.createIcons();
-    
+
     const msg = enrichData ? "🤖 AI-анализ отзывов (5-10 мин)..." : "🔄 Парсинг Яндекс.Карт (1-3 мин)...";
     addBotMessage(msg);
-    
+
     try {
         const r = await fetch("/api/scrape/start", {
             method: "POST",
