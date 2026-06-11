@@ -471,6 +471,8 @@ body[data-theme="light"] #theme-toggle .icon-light { display: block; }
 #analyze-pro-btn:hover {
     background: oklch(0.7 0.18 50 / 0.1);
 }
-
+.density-card { 
+    background: linear-gradient(135deg, var(--card), var(--secondary)); 
+}
 
 
