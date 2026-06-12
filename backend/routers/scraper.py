@@ -77,11 +77,13 @@ async def start_scrape(req: ScrapeRequest):
     if not APIFY_TOKEN:
         raise HTTPException(status_code=500, detail="APIFY_TOKEN not set")
 
+    # КЕШ
     cache_key = make_cache_key(req.bbox, req.categories, req.enrich_data)
     if cache_key in CACHE:
         cached = CACHE[cache_key]
         age = time.time() - cached.get("timestamp", 0)
         if age < CACHE_TTL:
+            print("CACHE HIT " + cache_key[:8])
             return {
                 "run_id": "cached_" + cache_key,
                 "status": "CACHED",
@@ -102,6 +104,7 @@ async def start_scrape(req: ScrapeRequest):
 
     city = reverse_geocode(center_lat, center_lon) or ""
 
+    # Запросы БЕЗ названия города (город задан координатами)
     queries = []
     for cat in req.categories:
         if cat in CATEGORY_QUERIES:
@@ -112,6 +115,8 @@ async def start_scrape(req: ScrapeRequest):
 
     safe_limit = 60 if req.enrich_data else 100
 
+    # КЛЮЧЕВОЕ: НЕ передаём location, только координаты
+    # Coordinates + viewportSpan должны заставить актор искать в этой области
     actor_input = {
         "query": queries,
         "coordinates": str(center_lon) + "," + str(center_lat),
@@ -205,6 +210,7 @@ async def check_status(run_id: str):
                 if not name or not lat or not lon:
                     continue
 
+                # ЖЁСТКИЙ бэкенд-фильтр по bbox (0% буфера)
                 if bbox_filter and not is_inside_bbox(lat, lon, bbox_filter, buffer_pct=0.0):
                     outside_count += 1
                     continue
@@ -236,6 +242,7 @@ async def check_status(run_id: str):
                 }
                 del CACHE[pending_key]
                 cleanup_cache()
+                print("CACHED " + cache_key[:8] + ": " + str(len(aggregated)) + " inside, " + str(outside_count) + " filtered out")
 
     return result
 
