@@ -31,11 +31,11 @@ async def debug_geocoder():
 async def search_address(q: str):
     if not q or len(q) < 2:
         return {"results": []}
-    
+
     results = []
     debug_info = []
 
-    # 1. ЯНДЕКС ГЕОКОДЕР
+    # 1. ЯНДЕКС ГЕОКОДЕР (основной, лучший для РФ/СНГ)
     if YANDEX_GEOCODER_KEY:
         try:
             r = requests.get(
@@ -49,11 +49,11 @@ async def search_address(q: str):
                 },
                 timeout=8
             )
-            debug_info.append(f"yandex_status={r.status_code}")
+            debug_info.append("yandex_status=" + str(r.status_code))
             if r.status_code == 200:
                 data = r.json()
                 members = data.get("response", {}).get("GeoObjectCollection", {}).get("featureMember", [])
-                debug_info.append(f"yandex_count={len(members)}")
+                debug_info.append("yandex_count=" + str(len(members)))
                 for m in members:
                     obj = m.get("GeoObject", {})
                     name = obj.get("name", "")
@@ -69,18 +69,16 @@ async def search_address(q: str):
                                 "lon": float(coords[0])
                             })
                 if results:
-                    print("SEARCH:", q, "→", len(results), "via Yandex")
                     return {"results": results, "source": "yandex"}
             else:
-                # Лог ошибки в консоль Railway
                 print("YANDEX GEOCODER ERROR " + str(r.status_code) + ": " + r.text[:300])
         except Exception as e:
             print("YANDEX EXCEPTION:", str(e))
-            debug_info.append(f"yandex_exc={str(e)[:50]}")
+            debug_info.append("yandex_exc=" + str(e)[:50])
     else:
         debug_info.append("yandex_key_missing")
 
-    # 2. PHOTON — fallback
+    # 2. PHOTON (Komoot) — fallback
     try:
         r = requests.get(
             "https://photon.komoot.io/api/",
@@ -103,9 +101,9 @@ async def search_address(q: str):
             if results:
                 return {"results": results, "source": "photon", "debug": debug_info}
     except Exception as e:
-        debug_info.append(f"photon_exc={str(e)[:50]}")
+        debug_info.append("photon_exc=" + str(e)[:50])
 
-    # 3. NOMINATIM
+    # 3. NOMINATIM (OSM) — последний fallback
     try:
         r2 = requests.get(
             "https://nominatim.openstreetmap.org/search",
@@ -120,7 +118,7 @@ async def search_address(q: str):
                     "lat": float(item.get("lat", 0)),
                     "lon": float(item.get("lon", 0))
                 })
-    except:
-        pass
+    except Exception as e:
+        debug_info.append("nominatim_exc=" + str(e)[:50])
 
     return {"results": results, "source": "fallback", "debug": debug_info}
