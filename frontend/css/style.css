@@ -574,8 +574,10 @@ body[data-theme="light"] #theme-toggle .icon-light { display: block; }
     border: 1px solid var(--border);
     border-radius: 8px;
     padding: 10px 12px;
-    cursor: pointer;
     transition: all 0.15s;
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
 .history-item:hover {
     background: var(--accent);
@@ -586,12 +588,41 @@ body[data-theme="light"] #theme-toggle .icon-light { display: block; }
     font-weight: 600;
     color: var(--foreground);
     margin-bottom: 2px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 .history-item-meta {
     font-size: 11px;
     color: var(--muted-fg);
     display: flex;
     justify-content: space-between;
+}
+.history-item-del {
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--muted-fg);
+    width: 24px;
+    height: 24px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 18px;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: all 0.15s;
+    opacity: 0.5;
+}
+.history-item:hover .history-item-del {
+    opacity: 1;
+}
+.history-item-del:hover {
+    background: var(--destructive);
+    color: #fff;
+    border-color: var(--destructive);
+    opacity: 1;
 }
 .history-empty {
     text-align: center;
