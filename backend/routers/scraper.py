@@ -254,3 +254,32 @@ async def cache_stats():
         "max_size": CACHE_MAX_SIZE,
         "ttl_hours": CACHE_TTL // 3600
     }
+@router.get("/scrape/debug")
+async def scrape_debug():
+    """Проверка APIFY_TOKEN и связи с Apify"""
+    result = {
+        "token_present": bool(APIFY_TOKEN),
+        "token_length": len(APIFY_TOKEN) if APIFY_TOKEN else 0,
+        "token_preview": (APIFY_TOKEN[:12] + "...") if APIFY_TOKEN else "MISSING",
+        "actor_id": ACTOR_ID
+    }
+    if APIFY_TOKEN:
+        try:
+            # Проверяем что токен валидный - запрашиваем инфо об акторе
+            r = requests.get(
+                "https://api.apify.com/v2/acts/" + ACTOR_ID,
+                params={"token": APIFY_TOKEN},
+                timeout=10
+            )
+            result["actor_check_status"] = r.status_code
+            if r.status_code == 200:
+                actor = r.json().get("data", {})
+                result["actor_name"] = actor.get("name", "")
+                result["actor_username"] = actor.get("username", "")
+            else:
+                result["actor_check_error"] = r.text[:300]
+        except Exception as e:
+            result["error"] = str(e)[:200]
+    return result
+
+
