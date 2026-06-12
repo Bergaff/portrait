@@ -204,7 +204,7 @@ function openProfile() {
         const clearBtn = document.createElement("button");
         clearBtn.className = "btn-ghost";
         clearBtn.style.cssText = "font-size:11px;padding:3px 8px";
-        clearBtn.textContent = "Очистить";
+        clearBtn.textContent = "Очистить всё";
         clearBtn.onclick = clearHistory;
         histHeader.appendChild(clearBtn);
     }
@@ -223,13 +223,29 @@ function openProfile() {
             const dt = new Date(item.date);
             const dtStr = dt.toLocaleDateString("ru-RU") + " " + dt.toLocaleTimeString("ru-RU", {hour:'2-digit', minute:'2-digit'});
             const modeIcon = item.mode === "free" ? "⚡" : item.mode === "pro+ai" ? "🤖" : "💎";
+            const shapeIcon = (item.shape && item.shape.type === "polygon") ? "⬡" : "▢";
             
             const histItem = document.createElement("div");
             histItem.className = "history-item";
-            histItem.innerHTML = 
-                '<div class="history-item-title">' + modeIcon + ' Индекс: ' + (item.score || "?") + '/100, мест: ' + (item.places || 0) + '</div>' +
+            
+            // Основной контент (кликабельная зона)
+            const itemContent = document.createElement("div");
+            itemContent.className = "history-item-content";
+            itemContent.style.cssText = "flex:1;cursor:pointer;min-width:0";
+            itemContent.innerHTML = 
+                '<div class="history-item-title">' + modeIcon + ' ' + shapeIcon + ' Индекс: ' + (item.score || "?") + '/100, мест: ' + (item.places || 0) + '</div>' +
                 '<div class="history-item-meta"><span>' + dtStr + '</span><span>' + (item.mode || "free") + '</span></div>';
-            histItem.onclick = function() { loadFromHistory(idx); };
+            itemContent.onclick = function() { loadFromHistory(idx); };
+            
+            // Кнопка удаления
+            const delBtn = document.createElement("button");
+            delBtn.className = "history-item-del";
+            delBtn.title = "Удалить запись";
+            delBtn.innerHTML = "×";
+            delBtn.onclick = function(e) { deleteHistoryItem(idx, e); };
+            
+            histItem.appendChild(itemContent);
+            histItem.appendChild(delBtn);
             list.appendChild(histItem);
         });
         
@@ -252,24 +268,42 @@ function saveToHistory(mode, placesCount, score) {
     try {
         history = JSON.parse(localStorage.getItem(key) || "[]");
     } catch (e) {}
-
+    
     const center = state.drawnLayer ? state.drawnLayer.getBounds().getCenter() : null;
-
+    
+    // Сохраняем полную геометрию выделения
+    let shapeData = null;
+    if (state.drawnLayer) {
+        try {
+            // Определяем тип: прямоугольник или полигон
+            const isRectangle = state.drawnLayer instanceof L.Rectangle;
+            const latlngs = state.drawnLayer.getLatLngs();
+            // Нормализуем структуру координат
+            const points = (latlngs[0] || latlngs).map(p => ({ lat: p.lat, lng: p.lng }));
+            shapeData = {
+                type: isRectangle ? "rectangle" : "polygon",
+                points: points
+            };
+        } catch (e) {
+            console.warn("Cant save shape", e);
+        }
+    }
+    
     history.unshift({
         bbox: state.bbox,
         center: center ? [center.lat, center.lng] : null,
+        shape: shapeData,
         mode: mode,
         places: placesCount,
         score: score,
         scores: state.scores,
-        organizations: state.organizations.slice(0, 100), // первые 100
+        organizations: state.organizations.slice(0, 100),
         scrapedData: state.scrapedData.slice(0, 100),
         orgText: state.orgText.substring(0, 5000),
         categories: state.categories,
         date: new Date().toISOString()
     });
-
-    // Храним последние 20
+    
     history = history.slice(0, 20);
     localStorage.setItem(key, JSON.stringify(history));
 }
@@ -279,7 +313,7 @@ function loadFromHistory(idx) {
     const history = JSON.parse(localStorage.getItem(key) || "[]");
     if (!history[idx]) return;
     const h = history[idx];
-
+    
     state.bbox = h.bbox;
     state.scores = h.scores || {};
     state.organizations = h.organizations || [];
@@ -287,24 +321,42 @@ function loadFromHistory(idx) {
     state.orgText = h.orgText || "";
     state.categories = h.categories || {};
     state.reportCache = null;
-
-    // Перерисовываем bbox на карте
+    
+    // Восстанавливаем форму на карте
     drawnItems.clearLayers();
-    if (h.bbox) {
+    let shape = null;
+    
+    if (h.shape && h.shape.points && h.shape.points.length >= 2) {
+        // Используем сохранённую полную форму
+        const latlngs = h.shape.points.map(p => [p.lat, p.lng]);
+        const style = { color: "#7c5cff", fillOpacity: 0.15, weight: 2 };
+        
+        if (h.shape.type === "polygon") {
+            shape = L.polygon(latlngs, style);
+        } else {
+            // rectangle
+            const bounds = L.latLngBounds(latlngs);
+            shape = L.rectangle(bounds, style);
+        }
+    } else if (h.bbox) {
+        // Fallback на старые записи без shape
         const parts = h.bbox.split(",").map(parseFloat);
-        const rect = L.rectangle([[parts[0], parts[1]], [parts[2], parts[3]]], {
+        shape = L.rectangle([[parts[0], parts[1]], [parts[2], parts[3]]], {
             color: "#7c5cff", fillOpacity: 0.15, weight: 2
         });
-        drawnItems.addLayer(rect);
-        state.drawnLayer = rect;
-        map.fitBounds(rect.getBounds());
     }
-
-    // Перерисовываем
+    
+    if (shape) {
+        drawnItems.addLayer(shape);
+        state.drawnLayer = shape;
+        map.fitBounds(shape.getBounds());
+    }
+    
+    // Перерисовываем слои
     if (state.heatLayer) { map.removeLayer(state.heatLayer); }
     if (state.markersLayer) { map.removeLayer(state.markersLayer); }
     if (state.scrapedMarkersLayer) { map.removeLayer(state.scrapedMarkersLayer); }
-
+    
     if (state.organizations.length > 0) {
         state.heatLayer = L.heatLayer(
             state.organizations.filter(o => o.lat && o.lon).map(o => [o.lat, o.lon, 1]),
@@ -313,12 +365,12 @@ function loadFromHistory(idx) {
     }
     if (h.mode && h.mode.startsWith("pro")) renderApifyMarkers();
     else renderFilteredMarkers();
-
+    
     showScores(state.scores);
     document.getElementById("actions-panel").style.display = "flex";
     document.getElementById("report-btn").style.display = "inline-flex";
     document.getElementById("quick-questions").style.display = "flex";
-
+    
     closeProfile();
     addBotMessage("📂 Загружено из истории: " + new Date(h.date).toLocaleString("ru-RU"));
 }
@@ -329,6 +381,16 @@ function clearHistory() {
     openProfile();
 }
 
+function deleteHistoryItem(idx, event) {
+    if (event) event.stopPropagation(); // не открывать запись при клике на удалить
+    const key = getHistoryKey();
+    let history = JSON.parse(localStorage.getItem(key) || "[]");
+    if (!history[idx]) return;
+    history.splice(idx, 1);
+    localStorage.setItem(key, JSON.stringify(history));
+    openProfile(); // перерисовываем список
+}
+
 // ========== STATE ==========
 let state = {
     bbox: null, organizations: [], scores: {}, categories: {}, orgText: "",
@@ -337,6 +399,9 @@ let state = {
     activeFilter: null, reportCache: null, chatBusy: false,
     scrapedData: [], scrapeRunId: null, scrapeEnriched: false, drawnLayer: null
 };
+// Глобальные переменные для поллинга
+let scrapingPollInterval = null;
+
 
 // ========== RESIZER ==========
 let isResizing = false;
@@ -941,64 +1006,64 @@ function openAnalyzeModal(mode) {
         addBotMessage("⚠ Сначала выделите область на карте");
         return;
     }
-    
+
     const isPro = mode === 'pro';
     const cats = ["Еда", "Здоровье", "Шопинг", "Красота", "Спорт", "Образование", "Досуг", "Авто", "Финансы", "Услуги"];
-    
+
     const container = document.getElementById("analyze-modal-content");
     container.innerHTML = "";
-    
+
     // Кнопка закрытия
     const closeBtn = document.createElement("button");
     closeBtn.className = "modal-close";
     closeBtn.textContent = "×";
     closeBtn.onclick = closeAnalyzeModal;
     container.appendChild(closeBtn);
-    
+
     // Заголовок
     const h2 = document.createElement("h2");
     h2.textContent = isPro ? "💎 Премиум-анализ" : "⚡ Быстрый анализ";
     container.appendChild(h2);
-    
+
     const p = document.createElement("p");
     p.textContent = isPro ? "Свежие данные с Яндекс.Карт" : "Данные из OpenStreetMap (бесплатно)";
     container.appendChild(p);
-    
+
     // Глубина (только для PRO)
     if (isPro) {
         const depthSection = document.createElement("div");
         depthSection.className = "opt-section";
         depthSection.innerHTML = '<h3>Глубина анализа</h3>';
-        
+
         const toggle = document.createElement("div");
         toggle.className = "opt-toggle";
-        
+
         const btnBasic = document.createElement("button");
         btnBasic.className = "opt-toggle-btn active";
         btnBasic.id = "depth-basic";
         btnBasic.innerHTML = 'Обычный<span class="opt-desc">Названия + рейтинги (1-3 мин)</span>';
         btnBasic.onclick = function() { selectDepth("basic"); };
-        
+
         const btnAi = document.createElement("button");
         btnAi.className = "opt-toggle-btn";
         btnAi.id = "depth-ai";
         btnAi.innerHTML = 'AI-анализ отзывов<span class="opt-desc">Саммари отзывов (5-10 мин)</span>';
         btnAi.onclick = function() { selectDepth("ai"); };
-        
+
         toggle.appendChild(btnBasic);
         toggle.appendChild(btnAi);
         depthSection.appendChild(toggle);
         container.appendChild(depthSection);
     }
-    
+
     // Категории
     const catSection = document.createElement("div");
     catSection.className = "opt-section";
     catSection.innerHTML = '<h3>Категории</h3>';
-    
+
     const grid = document.createElement("div");
     grid.className = "opt-cat-grid";
-    
+
     cats.forEach((c, i) => {
         const label = document.createElement("label");
         const cb = document.createElement("input");
@@ -1010,17 +1075,17 @@ function openAnalyzeModal(mode) {
         label.appendChild(document.createTextNode(" " + c));
         grid.appendChild(label);
     });
-    
+
     catSection.appendChild(grid);
     container.appendChild(catSection);
-    
+
     // Кнопка запуска
     const runBtn = document.createElement("button");
     runBtn.className = "btn-primary";
     runBtn.textContent = "Запустить анализ";
     runBtn.onclick = function() { runAnalysis(mode); };
     container.appendChild(runBtn);
-    
+
     document.getElementById("analyze-modal").style.display = "flex";
     window._analyzeDepth = "basic";
 }
@@ -1040,9 +1105,9 @@ function selectDepth(d) {
 async function runAnalysis(mode) {
     const checked = Array.from(document.querySelectorAll('input[name="cat-opt"]:checked')).map(x => x.value);
     if (checked.length === 0) { alert("Выберите хотя бы одну категорию"); return; }
-    
+
     closeAnalyzeModal();
-    
+
     state.reportCache = null;
     state.scrapedData = [];
     state.scrapeRunId = null;
@@ -1051,7 +1116,7 @@ async function runAnalysis(mode) {
     if (state.markersLayer) { map.removeLayer(state.markersLayer); state.markersLayer = null; }
     if (state.scrapedMarkersLayer) { map.removeLayer(state.scrapedMarkersLayer); state.scrapedMarkersLayer = null; }
     trackRequest();
-    
+
     if (mode === 'free') {
         await runFreeAnalysis(checked);
     } else {
