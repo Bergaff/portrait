@@ -41,7 +41,7 @@
         <header id="header">
             <div class="header-left">
                 <h1 class="header-title">Atlas Urban Analytics</h1>
-                <span class="header-badge">v1.6</span>
+                <span class="header-badge">v1.7</span>
             </div>
     <div class="header-right">
         <div class="search-box">
@@ -114,7 +114,7 @@
                     <div class="chat-section-header">
                         <i data-lucide="sparkles" class="spark-icon"></i>
                         <span>AI-урбанист</span>
-                        <span class="version-badge">v1.6</span>
+                        <span class="version-badge">v1.7</span>
                     </div>
                     <div id="chat-messages"></div>
                     <div class="chat-input-box">
@@ -152,7 +152,7 @@
     </div>
 
     <!-- Auth Modal -->
-    <div id="auth-modal" style="display:none;">
+<div id="auth-modal" style="display:none;">
         <div class="modal-bg"></div>
         <div class="modal-box">
             <button class="modal-close" onclick="toggleAuth()">×</button>
@@ -167,26 +167,21 @@
             <input type="email" id="auth-email" placeholder="Email" class="auth-input">
             <input type="password" id="auth-password" placeholder="Пароль" class="auth-input">
             <div id="auth-error"></div>
-            <button class="btn-primary" onclick="emailSignIn()">Войти</button>
-            <button class="btn-outline" onclick="emailSignUp()">Регистрация</button>
+            
+            <div class="modal-actions" style="margin-top: 10px;">
+                <button class="btn-primary" onclick="emailSignIn()" style="flex: 1;">Войти</button>
+                <button class="btn-outline" onclick="emailSignUp()" style="flex: 1;">Регистрация</button>
+            </div>
         </div>
     </div>
 
-    <!-- Profile Modal -->
     <div id="profile-modal" style="display:none;">
-        <div class="modal-bg"></div>
-        <div class="modal-box">
-            <button class="modal-close" onclick="closeProfile()">×</button>
-            <h2>Профиль</h2>
-            <div id="profile-content"></div>
         </div>
-    </div>
 
-    <!-- Confirm Modal -->
     <div id="confirm-modal" style="display:none;">
         <div class="modal-bg"></div>
         <div class="modal-box" style="max-width:340px">
-            <h2>Выйти из аккаунта?</h2>
+            <h2 style="margin-bottom: 24px;">Выйти из аккаунта?</h2>
             <div class="modal-actions">
                 <button class="btn-primary" onclick="doSignOut()">Да, выйти</button>
                 <button class="btn-outline" onclick="closeConfirm()">Отмена</button>
