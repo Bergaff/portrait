@@ -1,49 +1,48 @@
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
 :root {
-    /* Смягченная темная тема (была слишком темной) */
-    --background: oklch(0.20 0.005 286);
-    --foreground: oklch(0.95 0.005 286);
-    --card: oklch(0.23 0.005 286);
-    --card-hover: oklch(0.26 0.005 286);
-    --popover: oklch(0.23 0.005 286);
-    --primary: oklch(0.58 0.21 277);
-    --primary-foreground: oklch(0.98 0.005 286);
-    --primary-soft: oklch(0.58 0.21 277 / 0.15);
-    --secondary: oklch(0.28 0.006 286);
-    --muted: oklch(0.28 0.006 286);
-    --muted-fg: oklch(0.70 0.01 286);
-    --accent: oklch(0.30 0.007 286);
-    --destructive: oklch(0.62 0.22 25);
-    --success: oklch(0.72 0.16 145);
-    --warning: oklch(0.78 0.16 80);
-    --border: oklch(1 0 0 / 12%);
-    --input: oklch(1 0 0 / 15%);
-    --ring: oklch(0.58 0.21 277);
-    --sidebar: oklch(0.22 0.005 286);
-    --map-tiles: url('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png');
+    /* Тёмная тема — смягчена, не такая чёрная */
+    --background: oklch(0.195 0.01 260);
+    --foreground: oklch(0.94 0.008 260);
+    --card: oklch(0.23 0.012 260);
+    --card-hover: oklch(0.27 0.015 260);
+    --popover: oklch(0.25 0.012 260);
+    --primary: oklch(0.62 0.23 277);
+    --primary-foreground: oklch(0.98 0.01 260);
+    --primary-soft: oklch(0.62 0.23 277 / 0.15);
+    --secondary: oklch(0.28 0.015 260);
+    --muted: oklch(0.28 0.015 260);
+    --muted-fg: oklch(0.65 0.018 260);
+    --accent: oklch(0.32 0.018 260);
+    --destructive: oklch(0.65 0.22 25);
+    --success: oklch(0.68 0.18 145);
+    --warning: oklch(0.78 0.16 75);
+    --border: oklch(1 0 0 / 10%);
+    --input: oklch(1 0 0 / 13%);
+    --ring: oklch(0.62 0.23 277);
+    --sidebar: oklch(0.22 0.012 260);
 }
 
 body[data-theme="light"] {
-    /* Смягченная светлая тема (убран "ослепляющий" белый) */
-    --background: oklch(0.95 0.005 286); 
-    --foreground: oklch(0.25 0.005 286);
-    --card: oklch(0.98 0.003 286);
-    --card-hover: oklch(0.92 0.005 286);
-    --popover: oklch(0.98 0.003 286);
-    --primary: oklch(0.50 0.22 277);
-    --primary-foreground: oklch(0.99 0.005 286);
-    --primary-soft: oklch(0.50 0.22 277 / 0.12);
-    --secondary: oklch(0.89 0.006 286);
-    --muted: oklch(0.89 0.006 286);
-    --muted-fg: oklch(0.40 0.01 286);
-    --accent: oklch(0.87 0.007 286);
-    --border: oklch(0 0 0 / 12%);
-    --input: oklch(0 0 0 / 15%);
-    --sidebar: oklch(0.93 0.005 286);
+    /* Светлая тема — менее ослепительная */
+    --background: oklch(0.955 0.006 260);
+    --foreground: oklch(0.2 0.012 260);
+    --card: oklch(0.97 0.005 260);
+    --card-hover: oklch(0.935 0.008 260);
+    --popover: oklch(0.985 0.005 260);
+    --primary: oklch(0.52 0.22 277);
+    --primary-foreground: white;
+    --primary-soft: oklch(0.52 0.22 277 / 0.11);
+    --secondary: oklch(0.925 0.008 260);
+    --muted: oklch(0.925 0.008 260);
+    --muted-fg: oklch(0.5 0.018 260);
+    --accent: oklch(0.905 0.01 260);
+    --border: oklch(0.2 0.01 260 / 10%);
+    --input: oklch(0.2 0.01 260 / 12%);
+    --sidebar: oklch(0.945 0.006 260);
 }
 
-/* Скрываем флаг OSM в атрибуции Leaflet */
+/* Скрываем флаг OSM attribution */
 .leaflet-attribution-flag,
 .leaflet-control-attribution svg {
     display: none !important;
@@ -110,7 +109,7 @@ body {
 }
 .header-right { display: flex; align-items: center; gap: 12px; }
 
-.search-box { position: relative; width: 280px; }
+.search-box { position: relative; width: 280px; z-index: 10001; }
 .search-icon {
     position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
     width: 14px; height: 14px; color: var(--muted-fg);
@@ -127,11 +126,6 @@ body {
     background: var(--popover); border: 1px solid var(--border);
     border-radius: 8px; max-height: 320px; overflow-y: auto;
     z-index: 10000; box-shadow: 0 12px 40px rgba(0,0,0,0.6);
-}
-.search-box {
-    position: relative;
-    width: 280px;
-    z-index: 10001;
 }
 .leaflet-pane { z-index: 100 !important; }
 .leaflet-top, .leaflet-bottom { z-index: 200 !important; }
@@ -213,10 +207,10 @@ body[data-theme="light"] #theme-toggle .icon-light { display: block; }
     border-radius: 12px; padding: 16px;
 }
 .score-overall {
-    background: linear-gradient(135deg, var(--primary), oklch(0.45 0.22 290));
+    background: linear-gradient(135deg, var(--primary), oklch(0.48 0.22 290));
     border: none; color: #fff;
 }
-.score-overall .score-label { color: rgba(255,255,255,0.8); }
+.score-overall .score-label { color: rgba(255,255,255,0.85); }
 .score-overall .score-big { color: #fff; }
 .score-label {
     font-size: 11px; font-weight: 600;
@@ -380,6 +374,17 @@ body[data-theme="light"] #theme-toggle .icon-light { display: block; }
 .modal-actions { display: flex; gap: 8px; justify-content: center; }
 .modal-actions button { padding: 9px 20px; width: auto; }
 
+/* Кнопки Войти/Регистрация в одну строку */
+.modal-actions.auth-buttons {
+    display: flex;
+    gap: 10px;
+    margin-top: 8px;
+}
+.modal-actions.auth-buttons button {
+    flex: 1;
+    padding: 11px 16px;
+}
+
 .btn-social {
     width: 100%; padding: 10px 16px; margin-bottom: 8px;
     background: var(--secondary); border: 1px solid var(--border);
@@ -453,7 +458,6 @@ body[data-theme="light"] #theme-toggle .icon-light { display: block; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--muted-fg); }
-
 
 .btn-tag {
     margin-left: 8px;
@@ -639,3 +643,15 @@ body[data-theme="light"] #theme-toggle .icon-light { display: block; }
     font-size: 13px;
 }
 
+/* ===== CONFIRM MODAL — отступ сверху ===== */
+#confirm-modal .modal-box {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+#confirm-modal .modal-actions {
+    margin-top: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
