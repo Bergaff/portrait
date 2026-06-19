@@ -180,26 +180,26 @@ function openProfile() {
     if (!currentUser) { toggleAuth(); return; }
     const d = new Date(currentUser.created_at).toLocaleDateString("ru-RU");
     const p = currentUser.app_metadata?.provider || "email";
-    
+
     const container = document.getElementById("profile-content");
     container.innerHTML = "";
-    
+
     // Базовая информация
     const info = document.createElement("div");
-    info.innerHTML = 
+    info.innerHTML =
         '<div class="profile-row"><span class="profile-label">Email</span><span>' + (currentUser.email || "—") + '</span></div>' +
         '<div class="profile-row"><span class="profile-label">Способ входа</span><span style="text-transform:capitalize">' + p + '</span></div>' +
         '<div class="profile-row"><span class="profile-label">Регистрация</span><span>' + d + '</span></div>' +
         '<div class="profile-row"><span class="profile-label">Запросов</span><span>' + userStats.requests + '</span></div>';
     container.appendChild(info);
-    
+
     // История
     const history = JSON.parse(localStorage.getItem(getHistoryKey()) || "[]");
-    
+
     const histHeader = document.createElement("div");
     histHeader.style.cssText = "margin-top:16px;display:flex;justify-content:space-between;align-items:center;margin-bottom:8px";
     histHeader.innerHTML = '<span class="profile-label" style="font-weight:600">История анализов (' + history.length + ')</span>';
-    
+
     if (history.length > 0) {
         const clearBtn = document.createElement("button");
         clearBtn.className = "btn-ghost";
@@ -209,7 +209,7 @@ function openProfile() {
         histHeader.appendChild(clearBtn);
     }
     container.appendChild(histHeader);
-    
+
     if (history.length === 0) {
         const empty = document.createElement("div");
         empty.className = "history-empty";
@@ -218,40 +218,40 @@ function openProfile() {
     } else {
         const list = document.createElement("div");
         list.className = "history-list";
-        
+
         history.forEach((item, idx) => {
             const dt = new Date(item.date);
             const dtStr = dt.toLocaleDateString("ru-RU") + " " + dt.toLocaleTimeString("ru-RU", {hour:'2-digit', minute:'2-digit'});
             const modeIcon = item.mode === "free" ? "⚡" : item.mode === "pro+ai" ? "🤖" : "💎";
             const shapeIcon = (item.shape && item.shape.type === "polygon") ? "⬡" : "▢";
-            
+
             const histItem = document.createElement("div");
             histItem.className = "history-item";
-            
+
             // Основной контент (кликабельная зона)
             const itemContent = document.createElement("div");
             itemContent.className = "history-item-content";
             itemContent.style.cssText = "flex:1;cursor:pointer;min-width:0";
-            itemContent.innerHTML = 
+            itemContent.innerHTML =
                 '<div class="history-item-title">' + modeIcon + ' ' + shapeIcon + ' Индекс: ' + (item.score || "?") + '/100, мест: ' + (item.places || 0) + '</div>' +
                 '<div class="history-item-meta"><span>' + dtStr + '</span><span>' + (item.mode || "free") + '</span></div>';
             itemContent.onclick = function() { loadFromHistory(idx); };
-            
+
             // Кнопка удаления
             const delBtn = document.createElement("button");
             delBtn.className = "history-item-del";
             delBtn.title = "Удалить запись";
             delBtn.innerHTML = "×";
             delBtn.onclick = function(e) { deleteHistoryItem(idx, e); };
-            
+
             histItem.appendChild(itemContent);
             histItem.appendChild(delBtn);
             list.appendChild(histItem);
         });
-        
+
         container.appendChild(list);
     }
-    
+
     document.getElementById("profile-modal").style.display = "flex";
 }
 function closeProfile() { document.getElementById("profile-modal").style.display = "none"; }
@@ -268,9 +268,9 @@ function saveToHistory(mode, placesCount, score) {
     try {
         history = JSON.parse(localStorage.getItem(key) || "[]");
     } catch (e) {}
-    
+
     const center = state.drawnLayer ? state.drawnLayer.getBounds().getCenter() : null;
-    
+
     // Сохраняем полную геометрию выделения
     let shapeData = null;
     if (state.drawnLayer) {
@@ -288,7 +288,7 @@ function saveToHistory(mode, placesCount, score) {
             console.warn("Cant save shape", e);
         }
     }
-    
+
     history.unshift({
         bbox: state.bbox,
         center: center ? [center.lat, center.lng] : null,
@@ -303,7 +303,7 @@ function saveToHistory(mode, placesCount, score) {
         categories: state.categories,
         date: new Date().toISOString()
     });
-    
+
     history = history.slice(0, 20);
     localStorage.setItem(key, JSON.stringify(history));
 }
@@ -313,7 +313,7 @@ function loadFromHistory(idx) {
     const history = JSON.parse(localStorage.getItem(key) || "[]");
     if (!history[idx]) return;
     const h = history[idx];
-    
+
     state.bbox = h.bbox;
     state.scores = h.scores || {};
     state.organizations = h.organizations || [];
@@ -321,16 +321,16 @@ function loadFromHistory(idx) {
     state.orgText = h.orgText || "";
     state.categories = h.categories || {};
     state.reportCache = null;
-    
+
     // Восстанавливаем форму на карте
     drawnItems.clearLayers();
     let shape = null;
-    
+
     if (h.shape && h.shape.points && h.shape.points.length >= 2) {
         // Используем сохранённую полную форму
         const latlngs = h.shape.points.map(p => [p.lat, p.lng]);
         const style = { color: "#7c5cff", fillOpacity: 0.15, weight: 2 };
-        
+
         if (h.shape.type === "polygon") {
             shape = L.polygon(latlngs, style);
         } else {
@@ -345,18 +345,18 @@ function loadFromHistory(idx) {
             color: "#7c5cff", fillOpacity: 0.15, weight: 2
         });
     }
-    
+
     if (shape) {
         drawnItems.addLayer(shape);
         state.drawnLayer = shape;
         map.fitBounds(shape.getBounds());
     }
-    
+
     // Перерисовываем слои
     if (state.heatLayer) { map.removeLayer(state.heatLayer); }
     if (state.markersLayer) { map.removeLayer(state.markersLayer); }
     if (state.scrapedMarkersLayer) { map.removeLayer(state.scrapedMarkersLayer); }
-    
+
     if (state.organizations.length > 0) {
         state.heatLayer = L.heatLayer(
             state.organizations.filter(o => o.lat && o.lon).map(o => [o.lat, o.lon, 1]),
@@ -365,12 +365,12 @@ function loadFromHistory(idx) {
     }
     if (h.mode && h.mode.startsWith("pro")) renderApifyMarkers();
     else renderFilteredMarkers();
-    
+
     showScores(state.scores);
     document.getElementById("actions-panel").style.display = "flex";
     document.getElementById("report-btn").style.display = "inline-flex";
     document.getElementById("quick-questions").style.display = "flex";
-    
+
     closeProfile();
     addBotMessage("📂 Загружено из истории: " + new Date(h.date).toLocaleString("ru-RU"));
 }
