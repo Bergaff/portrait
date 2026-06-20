@@ -21,6 +21,7 @@
     --input: oklch(1 0 0 / 13%);
     --ring: oklch(0.62 0.23 277);
     --sidebar: oklch(0.22 0.012 260);
+    --map-tiles: url('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png');
 }
 
 body[data-theme="light"] {
@@ -48,6 +49,14 @@ body[data-theme="light"] {
     display: none !important;
 }
 
+/* Фильтры карт — смягчение контраста и яркости */
+.leaflet-tile-pane {
+    filter: brightness(1.15) saturate(0.75) contrast(0.88);
+}
+body[data-theme="light"] .leaflet-tile-pane {
+    filter: brightness(0.9) saturate(0.8) contrast(0.93);
+}
+
 body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     background: var(--background);
@@ -56,7 +65,7 @@ body {
     height: 100vh;
     font-size: 14px;
     -webkit-font-smoothing: antialiased;
-    transition: background 0.2s, color 0.2s;
+    transition: background 0.3s, color 0.3s;
 }
 
 #app { display: flex; height: 100vh; width: 100vw; }
@@ -205,7 +214,15 @@ body[data-theme="light"] #theme-toggle .icon-light { display: block; }
 .score-card {
     background: var(--card); border: 1px solid var(--border);
     border-radius: 12px; padding: 16px;
+    transition: background 0.2s;
 }
+.score-card:hover {
+    background: var(--card-hover);
+}
+body[data-theme="light"] .score-card {
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+}
+
 .score-overall {
     background: linear-gradient(135deg, var(--primary), oklch(0.48 0.22 290));
     border: none; color: #fff;
@@ -306,13 +323,16 @@ body[data-theme="light"] #theme-toggle .icon-light { display: block; }
 }
 .msg-assistant {
     background: var(--secondary); border-radius: 10px 10px 10px 4px;
-    padding: 10px 12px; font-size: 13px; line-height: 1.5;
+    padding: 11px 13px; font-size: 13px; line-height: 1.5;
     align-self: flex-start;
 }
 .msg-user {
     background: var(--primary); color: var(--primary-foreground);
-    border-radius: 10px 10px 4px 10px; padding: 10px 12px;
+    border-radius: 10px 10px 4px 10px; padding: 11px 13px;
     font-size: 13px; align-self: flex-end;
+}
+body[data-theme="light"] #chat-messages .msg-user {
+    color: white;
 }
 .msg-loading {
     background: var(--secondary); border-radius: 10px 10px 10px 4px;
@@ -373,17 +393,6 @@ body[data-theme="light"] #theme-toggle .icon-light { display: block; }
 .modal-close:hover { background: var(--card-hover); }
 .modal-actions { display: flex; gap: 8px; justify-content: center; }
 .modal-actions button { padding: 9px 20px; width: auto; }
-
-/* Кнопки Войти/Регистрация в одну строку */
-.modal-actions.auth-buttons {
-    display: flex;
-    gap: 10px;
-    margin-top: 8px;
-}
-.modal-actions.auth-buttons button {
-    flex: 1;
-    padding: 11px 16px;
-}
 
 .btn-social {
     width: 100%; padding: 10px 16px; margin-bottom: 8px;
@@ -459,6 +468,7 @@ body[data-theme="light"] #theme-toggle .icon-light { display: block; }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--muted-fg); }
 
+/* Обновленный ярлык FREE - четкий и контрастный */
 .btn-tag {
     margin-left: 8px;
     padding: 2px 6px;
@@ -469,8 +479,10 @@ body[data-theme="light"] #theme-toggle .icon-light { display: block; }
     letter-spacing: 0.5px;
 }
 .tag-free {
-    background: rgba(255,255,255,0.15);
-    color: var(--muted-fg);
+    background: var(--foreground);
+    color: var(--background);
+    opacity: 0.9;
+    font-weight: 800;
 }
 .tag-pro {
     background: linear-gradient(135deg, #feca57, #ff6b6b);
@@ -487,7 +499,6 @@ body[data-theme="light"] #theme-toggle .icon-light { display: block; }
     background: linear-gradient(135deg, var(--card), var(--secondary));
 }
 
-/* ===== АНИМАЦИЯ ИКОНКИ ОТЧЁТА ===== */
 .spinning {
     animation: spin 1s linear infinite;
 }
@@ -641,17 +652,4 @@ body[data-theme="light"] #theme-toggle .icon-light { display: block; }
     padding: 20px;
     color: var(--muted-fg);
     font-size: 13px;
-}
-
-/* ===== CONFIRM MODAL — отступ сверху ===== */
-#confirm-modal .modal-box {
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
-}
-#confirm-modal .modal-actions {
-    margin-top: 8px;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
 }
