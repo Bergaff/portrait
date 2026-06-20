@@ -494,29 +494,61 @@ map.on("draw:created", e => {
 
 // ========== ДОРАБОТКА РИСОВАНИЯ ПОЛИГОНА ==========
 const MAX_POINTS = 10;
-let drawToolbar = null;
-let currentHandler = null;
-let pointCount = 0;
+var drawToolbar = null;
+var currentHandler = null;
+var currentMode = "";
+var pointCount = 0;
+
+function getMaxPoints() {
+    return currentMode === "rectangle" ? 2 : MAX_POINTS;
+}
+
+function getMinFinishPoints() {
+    return currentMode === "rectangle" ? 2 : 3;
+}
+
+function updateUI() {
+    if (!drawToolbar) return;
+
+    var counter = document.getElementById("point-counter");
+    if (counter) {
+        counter.textContent = pointCount + "/" + getMaxPoints();
+    }
+
+    var btnFinish = document.getElementById("btn-finish-polygon");
+    if (btnFinish) {
+        if (pointCount >= getMinFinishPoints()) {
+            btnFinish.style.opacity = "1";
+            btnFinish.style.pointerEvents = "auto";
+            btnFinish.style.cursor = "pointer";
+        } else {
+            btnFinish.style.opacity = "0.4";
+            btnFinish.style.pointerEvents = "none";
+            btnFinish.style.cursor = "default";
+        }
+    }
+}
 
 function createToolbar() {
     if (drawToolbar) {
         drawToolbar.style.display = "flex";
-        if (typeof lucide !== 'undefined') lucide.createIcons();
+        if (typeof lucide !== "undefined") lucide.createIcons();
+        updateUI();
         return drawToolbar;
     }
 
     drawToolbar = document.createElement("div");
     drawToolbar.id = "custom-draw-toolbar";
-    drawToolbar.style.cssText = "position:absolute;bottom:32px;left:50%;transform:translateX(-50%);z-index:1500;display:none;gap:8px;padding:10px 14px;background:var(--card);border:1px solid var(--border);border-radius:12px;box-shadow:0 10px 40px rgba(0,0,0,0.4);";
+    drawToolbar.style.cssText = "position:absolute;bottom:32px;left:50%;transform:translateX(-50%);z-index:99999;display:flex;gap:8px;padding:10px 14px;background:var(--card,#222);border:1px solid var(--border,#444);border-radius:12px;box-shadow:0 10px 40px rgba(0,0,0,0.4);pointer-events:auto;";
 
-    var btnStyle = "padding:8px 16px;border-radius:8px;border:1px solid var(--border);background:var(--secondary);color:var(--foreground);font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;font-family:inherit;transition:all 0.15s;";
+    var btnStyle = "padding:8px 16px;border-radius:8px;border:1px solid var(--border,#444);background:var(--secondary,#333);color:var(--foreground,#fff);font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;font-family:inherit;transition:all 0.15s;";
 
     var btnCancel = document.createElement("button");
     btnCancel.style.cssText = btnStyle;
-    btnCancel.textContent = "Отмена";
+    btnCancel.textContent = "✕ Отмена";
     btnCancel.onmouseenter = function() { this.style.background = "var(--accent)"; };
     btnCancel.onmouseleave = function() { this.style.background = "var(--secondary)"; };
-    btnCancel.onclick = function() { 
+    btnCancel.onclick = function() {
         if (currentHandler && currentHandler.disable) {
             currentHandler.disable();
         }
@@ -524,7 +556,7 @@ function createToolbar() {
 
     var btnUndo = document.createElement("button");
     btnUndo.style.cssText = btnStyle;
-    btnUndo.textContent = "Удалить точку";
+    btnUndo.textContent = "↶ Удалить точку";
     btnUndo.onmouseenter = function() { this.style.background = "var(--accent)"; };
     btnUndo.onmouseleave = function() { this.style.background = "var(--secondary)"; };
     btnUndo.onclick = function() {
@@ -538,11 +570,15 @@ function createToolbar() {
     var btnFinish = document.createElement("button");
     btnFinish.id = "btn-finish-polygon";
     btnFinish.style.cssText = "padding:8px 16px;border-radius:8px;border:none;background:var(--primary);color:white;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;font-family:inherit;transition:opacity 0.15s;opacity:0.4;pointer-events:none;";
-    btnFinish.innerHTML = "Готово <span id=\"point-counter\" style=\"opacity:0.7;font-size:11px;margin-left:4px\">0/" + MAX_POINTS + "</span>";
-    btnFinish.onmouseenter = function() { if(pointCount >= 3) this.style.opacity = "0.9"; };
-    btnFinish.onmouseleave = function() { this.style.opacity = pointCount >= 3 ? "1" : "0.4"; };
+    btnFinish.innerHTML = "✓ Готово <span id=\"point-counter\" style=\"opacity:0.7;font-size:11px;margin-left:4px\">0/" + getMaxPoints() + "</span>";
+    btnFinish.onmouseenter = function() {
+        if (pointCount >= getMinFinishPoints()) this.style.opacity = "0.9";
+    };
+    btnFinish.onmouseleave = function() {
+        this.style.opacity = pointCount >= getMinFinishPoints() ? "1" : "0.4";
+    };
     btnFinish.onclick = function() {
-        if (currentHandler && pointCount >= 3 && typeof currentHandler.completeShape === "function") {
+        if (currentHandler && pointCount >= getMinFinishPoints() && typeof currentHandler.completeShape === "function") {
             currentHandler.completeShape();
         }
     };
@@ -550,94 +586,237 @@ function createToolbar() {
     drawToolbar.appendChild(btnCancel);
     drawToolbar.appendChild(btnUndo);
     drawToolbar.appendChild(btnFinish);
-    document.getElementById("map-section").appendChild(drawToolbar);
-    
+
+    var mapSection = document.getElementById("map-section");
+    if (mapSection) {
+        mapSection.appendChild(drawToolbar);
+    } else {
+        document.body.appendChild(drawToolbar);
+    }
+
     drawToolbar.style.display = "flex";
-    if (typeof lucide !== 'undefined') lucide.createIcons();
-    
+    if (typeof lucide !== "undefined") lucide.createIcons();
+
     return drawToolbar;
 }
 
-function updateUI() {
-    var counter = document.getElementById("point-counter");
-    if (counter) {
-        counter.textContent = pointCount + "/" + MAX_POINTS;
-    }
-    
-    var btnFinish = document.getElementById("btn-finish-polygon");
-    if (btnFinish) {
-        if (pointCount >= 3) {
-            btnFinish.style.opacity = "1";
-            btnFinish.style.pointerEvents = "auto";
-            btnFinish.style.cursor = "pointer";
-        } else {
-            btnFinish.style.opacity = "0.4";
-            btnFinish.style.pointerEvents = "none";
-            btnFinish.style.cursor = "default";
-        }
+function hideToolbar() {
+    if (drawToolbar) {
+        drawToolbar.style.display = "none";
     }
 }
 
-// Начало рисования полигона
-map.on(L.Draw.Event.DRAWSTART, function(e) {
-    if (e.layerType !== "polygon") return;
-    
-    currentHandler = e.handler;
-    pointCount = 0;
-    createToolbar();
-    updateUI();
-});
+function clearAnalysisUI() {
+    if (state.heatLayer) {
+        map.removeLayer(state.heatLayer);
+        state.heatLayer = null;
+    }
+    if (state.markersLayer) {
+        map.removeLayer(state.markersLayer);
+        state.markersLayer = null;
+    }
+    if (state.scrapedMarkersLayer) {
+        map.removeLayer(state.scrapedMarkersLayer);
+        state.scrapedMarkersLayer = null;
+    }
 
-// Отслеживание каждой добавленной вершины через патч обработчика
-map.on(L.Draw.Event.DRAWSTART, function(e) {
-    if (e.layerType !== "polygon") return;
-    
-    var handler = e.handler;
-    var originalAddVertex = handler._addVertex;
-    
-    handler._addVertex = function(latlng) {
-        // Вызываем оригинал
-        originalAddVertex.call(this, latlng);
-        
-        // Обновляем счётчик (проверяем реальное количество маркеров)
-        pointCount = this._markers ? this._markers.length : 0;
+    state.organizations = [];
+    state.scores = {};
+    state.categories = {};
+    state.orgText = "";
+    state.scrapedData = [];
+    state.scrapeRunId = null;
+    state.scrapeEnriched = false;
+    state.reportCache = null;
+    state.activeFilter = null;
+
+    document.getElementById("actions-panel").style.display = "none";
+    document.getElementById("report-btn").style.display = "none";
+    document.getElementById("quick-questions").style.display = "none";
+}
+
+function setCurrentLayer(layer) {
+    drawnItems.clearLayers();
+    drawnItems.addLayer(layer);
+    state.drawnLayer = layer;
+    var b = layer.getBounds();
+    state.bbox = b.getSouth() + "," + b.getWest() + "," + b.getNorth() + "," + b.getEast();
+    document.getElementById("actions-panel").style.display = "flex";
+    state.reportCache = null;
+}
+
+function addDrawingHint(mode) {
+    if (window._qpDrawingHintShown) return;
+    window._qpDrawingHintShown = true;
+
+    if (mode === "rectangle") {
+        addBotMessage("ℹ Для прямоугольника: 1-й клик — первая точка, 2-й клик — вторая точка. Удерживать мышь не нужно.");
+    } else {
+        addBotMessage("ℹ Рисование области: используйте ЛЕВУЮ кнопку мыши. Можно удалить последнюю точку, отменить рисование или завершить полигон кнопкой «Готово».");
+    }
+}
+
+function patchRectangleTool() {
+    if (!L.Draw || !L.Draw.Rectangle || L.Draw.Rectangle.prototype._qpPatched) return;
+
+    var RP = L.Draw.Rectangle.prototype;
+    RP._qpPatched = true;
+
+    RP.addHooks = function() {
+        L.Draw.Feature.prototype.addHooks.call(this);
+
+        if (!this._map) return;
+
+        this._qpStartLatLng = null;
+        this._qpClickHandler = this._qpClickHandler || this._onQPClick.bind(this);
+        this._qpMoveHandler = this._qpMoveHandler || this._onQPMove.bind(this);
+
+        if (this._map.dragging) this._map.dragging.disable();
+        if (this._map.doubleClickZoom) this._map.doubleClickZoom.disable();
+
+        this._map.on("click", this._qpClickHandler, this);
+        this._map.on("mousemove", this._qpMoveHandler, this);
+        this._map.getContainer().style.cursor = "crosshair";
+    };
+
+    RP.removeHooks = function() {
+        L.Draw.Feature.prototype.removeHooks.call(this);
+
+        if (!this._map) return;
+
+        this._map.off("click", this._qpClickHandler, this);
+        this._map.off("mousemove", this._qpMoveHandler, this);
+
+        if (this._map.dragging) this._map.dragging.enable();
+        if (this._map.doubleClickZoom) this._map.doubleClickZoom.enable();
+
+        this._map.getContainer().style.cursor = "";
+        this._qpStartLatLng = null;
+    };
+
+    RP._onQPClick = function(e) {
+        if (e.originalEvent && e.originalEvent.button !== 0) return;
+
+        if (!this._qpStartLatLng) {
+            this._qpStartLatLng = e.latlng;
+            currentMode = "rectangle";
+            currentHandler = this;
+            pointCount = 1;
+            createToolbar();
+            updateUI();
+
+            if (typeof this._drawShape === "function") {
+                this._drawShape(e.latlng);
+            }
+            return;
+        }
+
+        pointCount = 2;
         updateUI();
-        
-        // Автоматическое завершение при лимите
-        if (pointCount >= MAX_POINTS && typeof this.completeShape === "function") {
-            var self = this;
-            setTimeout(function() {
-                self.completeShape();
-            }, 100);
+
+        if (typeof this._drawShape === "function") {
+            this._drawShape(e.latlng);
+        }
+        if (typeof this._fireCreatedEvent === "function") {
+            this._fireCreatedEvent();
+        }
+        this.disable();
+    };
+
+    RP._onQPMove = function(e) {
+        if (!this._qpStartLatLng) return;
+        if (typeof this._drawShape === "function") {
+            this._drawShape(e.latlng);
         }
     };
-});
+}
 
-// Конец рисования
-map.on(L.Draw.Event.DRAWSTOP, function() {
-    var tb = document.getElementById("custom-draw-toolbar");
-    if (tb) tb.style.display = "none";
-    currentHandler = null;
+patchRectangleTool();
+
+map.on(L.Draw.Event.DRAWSTART, function(e) {
+    if (e.layerType !== "polygon" && e.layerType !== "rectangle") return;
+
+    currentHandler = e.handler;
+    currentMode = e.layerType;
     pointCount = 0;
+
+    createToolbar();
+    updateUI();
+    addDrawingHint(currentMode);
 });
 
-// Проверка и скрытие стандартных кнопок
+map.on(L.Draw.Event.DRAWVERTEX, function(e) {
+    if (!currentHandler || currentMode !== "polygon") return;
+
+    if (e.layers && typeof e.layers.getLayers === "function") {
+        pointCount = e.layers.getLayers().length;
+    } else if (currentHandler._markers) {
+        pointCount = currentHandler._markers.length;
+    } else {
+        pointCount = Math.max(0, pointCount + 1);
+    }
+
+    updateUI();
+
+    if (pointCount >= MAX_POINTS && typeof currentHandler.completeShape === "function") {
+        setTimeout(function() {
+            if (currentHandler && typeof currentHandler.completeShape === "function") {
+                currentHandler.completeShape();
+            }
+        }, 50);
+    }
+});
+
 map.on(L.Draw.Event.DRAWSTOP, function() {
+    hideToolbar();
+    currentHandler = null;
+    currentMode = "";
+    pointCount = 0;
+    window._qpDrawingHintShown = false;
+
     setTimeout(function() {
-        var actions = document.querySelectorAll(".leaflet-draw-actions");
-        for (var i = 0; i < actions.length; i++) {
-            actions[i].style.display = "none";
-        }
+        document.querySelectorAll(".leaflet-draw-actions").forEach(function(el) {
+            el.style.display = "none";
+        });
     }, 10);
 });
 
-console.log("Полигон: лимит " + MAX_POINTS + " точек, кастомный тулбар готов");
+// Удаление области — реально чистим всё, чтобы она не появлялась снова
+map.on("draw:deleted", function() {
+    drawnItems.clearLayers();
+    state.drawnLayer = null;
+    state.bbox = null;
 
-// ========== CITY ==========
-let detectedCity = "", detectedLat = 55.7558, detectedLon = 37.6173;
-let cityInitTimeout = null;
+    clearAnalysisUI();
+    hideToolbar();
 
-// ========== CITY ==========
+    addBotMessage("🗑 Область удалена. Теперь можно выбрать новую.");
+});
+
+// Редактирование области — обновляем текущую геометрию
+map.on("draw:edited", function(e) {
+    var layers = e.layers && e.layers.getLayers ? e.layers.getLayers() : [];
+    if (!layers.length) return;
+
+    var layer = layers[0];
+    state.drawnLayer = layer;
+
+    var b = layer.getBounds();
+    state.bbox = b.getSouth() + "," + b.getWest() + "," + b.getNorth() + "," + b.getEast();
+
+    document.getElementById("actions-panel").style.display = "flex";
+    state.reportCache = null;
+});
+
+setInterval(function() {
+    document.querySelectorAll(".leaflet-draw-actions").forEach(function(el) {
+        el.style.display = "none";
+    });
+}, 200);
+
+console.log("✅ Полигон/прямоугольник: тулбар, лимит точек и click-click прямоугольник готовы");
+
+ // ========== CITY ==========
 let detectedCity = "", detectedLat = 55.7558, detectedLon = 37.6173;
 let cityInitTimeout = null;
 
@@ -647,11 +826,15 @@ function initCity() {
         const d = JSON.parse(saved);
         map.setView([d.lat, d.lon], 13);
         document.getElementById("city-modal").style.display = "none";
-        addBotMessage("Привет! Я AI-урбанист\n\nГород: " + d.name + "\n\nВыберите интересующую вас область с помощью:\n⬡ многоугольника или ▢ прямоугольника с левой стороны карты\n→ далее нажмите «Анализ»\n\nВы можете изменить точки области или удалить неудачную через меню редактирования.");
+        addBotMessage("Привет! Я AI-урбанист\n\nГород: " + d.name + "\n\nВыберите интересующую вас область с помощью:\n⬡ многоугольника или ▢ прямоугольника с левой стороны карты\n→ далее нажмите «Анализ»\n\nВы можете менять точки области, удалить неудачную или нарисовать новую.");
         return;
     }
+
     document.getElementById("city-modal").style.display = "flex";
-    cityInitTimeout = setTimeout(function() { if (!detectedCity) showCityInput(); }, 12000);
+    cityInitTimeout = setTimeout(function() {
+        if (!detectedCity) showCityInput();
+    }, 12000);
+
     if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
             async function(pos) {
@@ -661,50 +844,68 @@ function initCity() {
                     var c = d.address?.city || d.address?.town || d.address?.village || "Ваш город";
                     clearTimeout(cityInitTimeout);
                     showCityConfirm(c, pos.coords.latitude, pos.coords.longitude);
-                } catch (e) { clearTimeout(cityInitTimeout); detectByIP(); }
+                } catch (e) {
+                    clearTimeout(cityInitTimeout);
+                    detectByIP();
+                }
             },
-            function() { clearTimeout(cityInitTimeout); detectByIP(); },
+            function() {
+                clearTimeout(cityInitTimeout);
+                detectByIP();
+            },
             { timeout: 8000 }
         );
     } else detectByIP();
 }
+
 async function detectByIP() {
     try {
         var r = await fetch("https://ipapi.co/json/");
         if (r.ok) {
             var d = await r.json();
-            if (d.city && d.latitude) { clearTimeout(cityInitTimeout); showCityConfirm(d.city, d.latitude, d.longitude); return; }
+            if (d.city && d.latitude) {
+                clearTimeout(cityInitTimeout);
+                showCityConfirm(d.city, d.latitude, d.longitude);
+                return;
+            }
         }
     } catch (e) {}
     clearTimeout(cityInitTimeout);
     showCityInput();
 }
+
 function showCityConfirm(c, lat, lon) {
-    detectedCity = c; detectedLat = lat; detectedLon = lon;
+    detectedCity = c;
+    detectedLat = lat;
+    detectedLon = lon;
     document.getElementById("city-detecting").style.display = "none";
     document.getElementById("city-name-show").textContent = c;
     document.getElementById("city-confirm").style.display = "block";
 }
+
 function showCityInput() {
     clearTimeout(cityInitTimeout);
     document.getElementById("city-detecting").style.display = "none";
     document.getElementById("city-confirm").style.display = "none";
     document.getElementById("city-input-block").style.display = "block";
 }
+
 function confirmCity() {
     clearTimeout(cityInitTimeout);
     localStorage.setItem("qp_city", JSON.stringify({ name: detectedCity, lat: detectedLat, lon: detectedLon }));
     map.setView([detectedLat, detectedLon], 13);
     document.getElementById("city-modal").style.display = "none";
-    addBotMessage("Привет! Я AI-урбанист\n\nГород: " + detectedCity + "\n\nВыберите интересующую вас область с помощью:\n⬡ многоугольника или ▢ прямоугольника с левой стороны карты\n→ далее нажмите «Анализ»\n\nВы можете изменить точки области или удалить неудачную через меню редактирования.");
+    addBotMessage("Привет! Я AI-урбанист\n\nГород: " + detectedCity + "\n\nВыберите интересующую вас область с помощью:\n⬡ многоугольника или ▢ прямоугольника с левой стороны карты\n→ далее нажмите «Анализ»\n\nВы можете менять точки области, удалить неудачную или нарисовать новую.");
 }
+
 function skipCity() {
     clearTimeout(cityInitTimeout);
     localStorage.setItem("qp_city", JSON.stringify({ name: "Москва", lat: 55.7558, lon: 37.6173 }));
     map.setView([55.7558, 37.6173], 13);
     document.getElementById("city-modal").style.display = "none";
-    addBotMessage("Привет!\n\nВыберите интересующую вам область с помощью:\n⬡ многоугольника или ▢ прямоугольника с левой стороны карты\n→ далее нажмите «Анализ»\n\nВы можете изменить точки области или удалить неудачную через меню редактирования.");
+    addBotMessage("Привет!\n\nВыберите интересующую вас область с помощью:\n⬡ многоугольника или ▢ прямоугольника с левой стороны карты\n→ далее нажмите «Анализ»\n\nВы можете менять точки области, удалить неудачную или нарисовать новую.");
 }
+
 async function searchAndGoCity() {
     var q = document.getElementById("city-input").value.trim();
     if (!q) return;
@@ -719,6 +920,7 @@ async function searchAndGoCity() {
     } catch (e) {}
     confirmCity();
 }
+
 initCity();
 
 // ========== SEARCH ==========
