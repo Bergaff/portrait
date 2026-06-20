@@ -1,7 +1,7 @@
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
 :root {
-    /* Тёмная тема — смягчена, не такая чёрная */
+    /* Тёмная тема — смягчена */
     --background: oklch(0.195 0.01 260);
     --foreground: oklch(0.94 0.008 260);
     --card: oklch(0.23 0.012 260);
@@ -21,7 +21,6 @@
     --input: oklch(1 0 0 / 13%);
     --ring: oklch(0.62 0.23 277);
     --sidebar: oklch(0.22 0.012 260);
-    --map-tiles: url('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png');
 }
 
 body[data-theme="light"] {
@@ -55,6 +54,63 @@ body[data-theme="light"] {
 }
 body[data-theme="light"] .leaflet-tile-pane {
     filter: brightness(0.9) saturate(0.8) contrast(0.93);
+}
+
+/* Анимация появления тулбара рисования */
+.draw-toolbar {
+    position: absolute;
+    bottom: 32px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1200;
+    display: flex;
+    gap: 10px;
+    padding: 10px 14px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.35);
+    animation: slideUp 0.2s ease;
+}
+
+@keyframes slideUp {
+    from { opacity: 0; transform: translateX(-50%) translateY(10px); }
+    to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+.draw-toolbar button {
+    padding: 8px 16px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--background);
+    color: var(--foreground);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.draw-toolbar button:hover {
+    background: var(--accent);
+    border-color: var(--primary);
+}
+
+.draw-toolbar button.btn-finish {
+    background: var(--primary);
+    color: white;
+    border-color: var(--primary);
+}
+
+.draw-toolbar button.btn-finish:hover {
+    opacity: 0.9;
+}
+
+/* Скрываем стандартный ужасный тулбар Leaflet Draw */
+.leaflet-draw-actions {
+    display: none !important;
 }
 
 body {
@@ -394,6 +450,16 @@ body[data-theme="light"] #chat-messages .msg-user {
 .modal-actions { display: flex; gap: 8px; justify-content: center; }
 .modal-actions button { padding: 9px 20px; width: auto; }
 
+.auth-buttons {
+    display: flex;
+    gap: 10px;
+    margin-top: 8px;
+}
+.auth-buttons button {
+    flex: 1;
+    padding: 11px 16px;
+}
+
 .btn-social {
     width: 100%; padding: 10px 16px; margin-bottom: 8px;
     background: var(--secondary); border: 1px solid var(--border);
@@ -632,8 +698,7 @@ body[data-theme="light"] #chat-messages .msg-user {
     font-size: 18px;
     line-height: 1;
     display: flex;
-    align-items: center;
-    justify-content: center;
+    align-items: center; justify-content: center;
     flex-shrink: 0;
     transition: all 0.15s;
     opacity: 0.5;
