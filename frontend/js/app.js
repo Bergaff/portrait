@@ -602,37 +602,42 @@ console.log("\u2705 Полигон: лимит " + MAX_POINTS + " точек, к
 let detectedCity = "", detectedLat = 55.7558, detectedLon = 37.6173;
 let cityInitTimeout = null;
 
+// ========== CITY ==========
+let detectedCity = "", detectedLat = 55.7558, detectedLon = 37.6173;
+let cityInitTimeout = null;
+
 function initCity() {
     const saved = localStorage.getItem("qp_city");
     if (saved) {
         const d = JSON.parse(saved);
         map.setView([d.lat, d.lon], 13);
         document.getElementById("city-modal").style.display = "none";
-        addBotMessage("Привет! Я AI-урбанист\n\nГород: " + d.name + "\n\nВыберите интересующую вас область с помощью:\n⬡ многоугольника или ▢ прямоугольника с левой стороны карты\n→ далее нажмите «Анализ»\n\nВы можете изменить точки области или удалить неудачную через меню редактирования.");        return;
+        addBotMessage("Привет! Я AI-урбанист\n\nГород: " + d.name + "\n\nВыберите интересующую вас область с помощью:\n⬡ многоугольника или ▢ прямоугольника с левой стороны карты\n→ далее нажмите «Анализ»\n\nВы можете изменить точки области или удалить неудачную через меню редактирования.");
+        return;
     }
     document.getElementById("city-modal").style.display = "flex";
-    cityInitTimeout = setTimeout(() => { if (!detectedCity) showCityInput(); }, 12000);
+    cityInitTimeout = setTimeout(function() { if (!detectedCity) showCityInput(); }, 12000);
     if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
-            async pos => {
+            async function(pos) {
                 try {
-                    const r = await fetch("https://nominatim.openstreetmap.org/reverse?lat=" + pos.coords.latitude + "&lon=" + pos.coords.longitude + "&format=json&accept-language=ru");
-                    const d = await r.json();
-                    const c = d.address?.city || d.address?.town || d.address?.village || "Ваш город";
+                    var r = await fetch("https://nominatim.openstreetmap.org/reverse?lat=" + pos.coords.latitude + "&lon=" + pos.coords.longitude + "&format=json&accept-language=ru");
+                    var d = await r.json();
+                    var c = d.address?.city || d.address?.town || d.address?.village || "Ваш город";
                     clearTimeout(cityInitTimeout);
                     showCityConfirm(c, pos.coords.latitude, pos.coords.longitude);
                 } catch (e) { clearTimeout(cityInitTimeout); detectByIP(); }
             },
-            () => { clearTimeout(cityInitTimeout); detectByIP(); },
+            function() { clearTimeout(cityInitTimeout); detectByIP(); },
             { timeout: 8000 }
         );
     } else detectByIP();
 }
 async function detectByIP() {
     try {
-        const r = await fetch("https://ipapi.co/json/");
+        var r = await fetch("https://ipapi.co/json/");
         if (r.ok) {
-            const d = await r.json();
+            var d = await r.json();
             if (d.city && d.latitude) { clearTimeout(cityInitTimeout); showCityConfirm(d.city, d.latitude, d.longitude); return; }
         }
     } catch (e) {}
@@ -656,20 +661,22 @@ function confirmCity() {
     localStorage.setItem("qp_city", JSON.stringify({ name: detectedCity, lat: detectedLat, lon: detectedLon }));
     map.setView([detectedLat, detectedLon], 13);
     document.getElementById("city-modal").style.display = "none";
-    addBotMessage("Привет! Я AI-урбанист\n\nГород: " + detectedCity + "\n\nВыберите интересующую вас область с помощью:\n⬡ многоугольника или ▢ прямоугольника с левой стороны карты\n→ далее нажмите «Анализ»\n\nВы можете изменить точки области или удалить неудачную через меню редактирования.");}
+    addBotMessage("Привет! Я AI-урбанист\n\nГород: " + detectedCity + "\n\nВыберите интересующую вас область с помощью:\n⬡ многоугольника или ▢ прямоугольника с левой стороны карты\n→ далее нажмите «Анализ»\n\nВы можете изменить точки области или удалить неудачную через меню редактирования.");
+}
 function skipCity() {
     clearTimeout(cityInitTimeout);
     localStorage.setItem("qp_city", JSON.stringify({ name: "Москва", lat: 55.7558, lon: 37.6173 }));
     map.setView([55.7558, 37.6173], 13);
     document.getElementById("city-modal").style.display = "none";
-    addBotMessage("Привет!\n\nВыберите интересующую вам область с помощью:\n⬡ многоугольника или ▢ прямоугольника с левой стороны карты\n→ далее нажмите «Анализ»\n\nВы можете изменить точки области или удалить неудачную через меню редактирования.");}
+    addBotMessage("Привет!\n\nВыберите интересующую вам область с помощью:\n⬡ многоугольника или ▢ прямоугольника с левой стороны карты\n→ далее нажмите «Анализ»\n\nВы можете изменить точки области или удалить неудачную через меню редактирования.");
+}
 async function searchAndGoCity() {
-    const q = document.getElementById("city-input").value.trim();
+    var q = document.getElementById("city-input").value.trim();
     if (!q) return;
     try {
-        const r = await fetch("/api/search?q=" + encodeURIComponent(q));
-        const d = await r.json();
-        if (d.results?.length > 0) {
+        var r = await fetch("/api/search?q=" + encodeURIComponent(q));
+        var d = await r.json();
+        if (d.results && d.results.length > 0) {
             detectedLat = d.results[0].lat;
             detectedLon = d.results[0].lon;
             detectedCity = d.results[0].display_name.split(",")[0];
