@@ -505,22 +505,18 @@ function createToolbar() {
     }
 
     drawToolbar = document.createElement("div");
-    drawToolbar.style.cssText = "position:absolute;bottom:32px;left:50%;transform:translateX(-50%);z-index:1500;display:none;gap:8px;padding:10px 14px;background:var(--card);border:1px solid var(--border);border-radius:12px;box-shadow:0 10px 40px rgba(0,0,0,0.4);";
+    drawToolbar.style.cssText = "position:absolute;bottom:32px;left:50%;transform:translateX(-50%);z-index:99999;display:flex;gap:8px;padding:10px 14px;background:var(--card,#222);border:1px solid var(--border,#444);border-radius:12px;box-shadow:0 10px 40px rgba(0,0,0,0.4);";
 
-    var btnStyle = "padding:8px 16px;border-radius:8px;border:1px solid var(--border);background:var(--secondary);color:var(--foreground);font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;font-family:inherit;transition:all 0.15s;";
+    var btnStyle = "padding:8px 16px;border-radius:8px;border:1px solid var(--border,#444);background:var(--secondary,#333);color:var(--foreground,#fff);font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;font-family:inherit;transition:all 0.15s;";
 
     var btnCancel = document.createElement("button");
     btnCancel.style.cssText = btnStyle;
     btnCancel.innerHTML = "\u2715 Отмена";
-    btnCancel.onmouseenter = function() { btnCancel.style.background = "var(--accent)"; };
-    btnCancel.onmouseleave = function() { btnCancel.style.background = "var(--secondary)"; };
     btnCancel.onclick = function() { if (currentHandler) currentHandler.disable(); };
 
     var btnUndo = document.createElement("button");
     btnUndo.style.cssText = btnStyle;
     btnUndo.innerHTML = "\u21B6 Удалить точку";
-    btnUndo.onmouseenter = function() { btnUndo.style.background = "var(--accent)"; };
-    btnUndo.onmouseleave = function() { btnUndo.style.background = "var(--secondary)"; };
     btnUndo.onclick = function() {
         if (currentHandler && typeof currentHandler.deleteLastVertex === "function") {
             currentHandler.deleteLastVertex();
@@ -530,10 +526,8 @@ function createToolbar() {
     };
 
     var btnFinish = document.createElement("button");
-    btnFinish.style.cssText = "padding:8px 16px;border-radius:8px;border:none;background:var(--primary);color:white;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;font-family:inherit;transition:opacity 0.15s;opacity:0.4;pointer-events:none;";
+    btnFinish.style.cssText = "padding:8px 16px;border-radius:8px;border:none;background:var(--primary,#7c5cff);color:white;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;font-family:inherit;transition:opacity 0.15s;opacity:0.4;pointer-events:none;";
     btnFinish.innerHTML = "\u2713 Готово <span id=\"point-counter\" style=\"opacity:0.7;font-size:11px;margin-left:4px\">0/" + MAX_POINTS + "</span>";
-    btnFinish.onmouseenter = function() { if(pointCount >= 3) btnFinish.style.opacity = "0.9"; };
-    btnFinish.onmouseleave = function() { btnFinish.style.opacity = pointCount >= 3 ? "1" : "0.4"; };
     btnFinish.onclick = function() {
         if (currentHandler && pointCount >= 3 && typeof currentHandler.completeShape === "function") {
             currentHandler.completeShape();
@@ -543,7 +537,15 @@ function createToolbar() {
     drawToolbar.appendChild(btnCancel);
     drawToolbar.appendChild(btnUndo);
     drawToolbar.appendChild(btnFinish);
-    document.getElementById("map-section").appendChild(drawToolbar);
+
+    var mapSection = document.getElementById("map-section");
+    console.log("map-section найден:", mapSection);
+    if (mapSection) {
+        mapSection.appendChild(drawToolbar);
+    } else {
+        document.body.appendChild(drawToolbar);
+    }
+    console.log("Тулбар создан:", drawToolbar);
     return drawToolbar;
 }
 
@@ -564,7 +566,10 @@ function updateUI() {
     }
 }
 
-map.on(L.Draw.Event.DRAWSTART, function(e) {
+console.log("L.Draw.Event:", typeof L.Draw, L.Draw ? L.Draw.Event : "НЕТ");
+
+map.on("draw:drawstart", function(e) {
+    console.log("DRAWSTART сработал, тип:", e.layerType);
     if (e.layerType !== "polygon") return;
     currentHandler = e.handler;
     pointCount = 0;
@@ -572,7 +577,8 @@ map.on(L.Draw.Event.DRAWSTART, function(e) {
     updateUI();
 });
 
-map.on(L.Draw.Event.DRAWVERTEX, function(e) {
+map.on("draw:drawvertex", function(e) {
+    console.log("DRAWVERTEX сработал");
     if (!currentHandler) return;
     pointCount = e.layers.getLayers().length;
     updateUI();
@@ -586,7 +592,8 @@ map.on(L.Draw.Event.DRAWVERTEX, function(e) {
     }
 });
 
-map.on(L.Draw.Event.DRAWSTOP, function() {
+map.on("draw:drawstop", function() {
+    console.log("DRAWSTOP сработал");
     if (drawToolbar) drawToolbar.style.display = "none";
     currentHandler = null;
     pointCount = 0;
@@ -595,7 +602,7 @@ map.on(L.Draw.Event.DRAWSTOP, function() {
 setInterval(function() {
     document.querySelectorAll(".leaflet-draw-actions").forEach(function(el) { el.style.display = "none"; });
 }, 200);
-console.log("\u2705 Полигон: лимит " + MAX_POINTS + " точек, кастомный тулбар");
+console.log("\u2705 Полигон: лимит " + MAX_POINTS + " точек, кастомный тулбар инициализирован");
 
 
 // ========== CITY ==========
