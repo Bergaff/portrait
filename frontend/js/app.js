@@ -501,22 +501,32 @@ let pointCount = 0;
 function createToolbar() {
     if (drawToolbar) {
         drawToolbar.style.display = "flex";
+        if (typeof lucide !== 'undefined') lucide.createIcons();
         return drawToolbar;
     }
 
     drawToolbar = document.createElement("div");
-    drawToolbar.style.cssText = "position:absolute;bottom:32px;left:50%;transform:translateX(-50%);z-index:99999;display:flex;gap:8px;padding:10px 14px;background:var(--card,#222);border:1px solid var(--border,#444);border-radius:12px;box-shadow:0 10px 40px rgba(0,0,0,0.4);";
+    drawToolbar.id = "custom-draw-toolbar";
+    drawToolbar.style.cssText = "position:absolute;bottom:32px;left:50%;transform:translateX(-50%);z-index:1500;display:none;gap:8px;padding:10px 14px;background:var(--card);border:1px solid var(--border);border-radius:12px;box-shadow:0 10px 40px rgba(0,0,0,0.4);";
 
-    var btnStyle = "padding:8px 16px;border-radius:8px;border:1px solid var(--border,#444);background:var(--secondary,#333);color:var(--foreground,#fff);font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;font-family:inherit;transition:all 0.15s;";
+    var btnStyle = "padding:8px 16px;border-radius:8px;border:1px solid var(--border);background:var(--secondary);color:var(--foreground);font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;font-family:inherit;transition:all 0.15s;";
 
     var btnCancel = document.createElement("button");
     btnCancel.style.cssText = btnStyle;
-    btnCancel.innerHTML = "\u2715 Отмена";
-    btnCancel.onclick = function() { if (currentHandler) currentHandler.disable(); };
+    btnCancel.textContent = "Отмена";
+    btnCancel.onmouseenter = function() { this.style.background = "var(--accent)"; };
+    btnCancel.onmouseleave = function() { this.style.background = "var(--secondary)"; };
+    btnCancel.onclick = function() { 
+        if (currentHandler && currentHandler.disable) {
+            currentHandler.disable();
+        }
+    };
 
     var btnUndo = document.createElement("button");
     btnUndo.style.cssText = btnStyle;
-    btnUndo.innerHTML = "\u21B6 Удалить точку";
+    btnUndo.textContent = "Удалить точку";
+    btnUndo.onmouseenter = function() { this.style.background = "var(--accent)"; };
+    btnUndo.onmouseleave = function() { this.style.background = "var(--secondary)"; };
     btnUndo.onclick = function() {
         if (currentHandler && typeof currentHandler.deleteLastVertex === "function") {
             currentHandler.deleteLastVertex();
@@ -526,8 +536,11 @@ function createToolbar() {
     };
 
     var btnFinish = document.createElement("button");
-    btnFinish.style.cssText = "padding:8px 16px;border-radius:8px;border:none;background:var(--primary,#7c5cff);color:white;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;font-family:inherit;transition:opacity 0.15s;opacity:0.4;pointer-events:none;";
-    btnFinish.innerHTML = "\u2713 Готово <span id=\"point-counter\" style=\"opacity:0.7;font-size:11px;margin-left:4px\">0/" + MAX_POINTS + "</span>";
+    btnFinish.id = "btn-finish-polygon";
+    btnFinish.style.cssText = "padding:8px 16px;border-radius:8px;border:none;background:var(--primary);color:white;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;font-family:inherit;transition:opacity 0.15s;opacity:0.4;pointer-events:none;";
+    btnFinish.innerHTML = "Готово <span id=\"point-counter\" style=\"opacity:0.7;font-size:11px;margin-left:4px\">0/" + MAX_POINTS + "</span>";
+    btnFinish.onmouseenter = function() { if(pointCount >= 3) this.style.opacity = "0.9"; };
+    btnFinish.onmouseleave = function() { this.style.opacity = pointCount >= 3 ? "1" : "0.4"; };
     btnFinish.onclick = function() {
         if (currentHandler && pointCount >= 3 && typeof currentHandler.completeShape === "function") {
             currentHandler.completeShape();
@@ -537,73 +550,88 @@ function createToolbar() {
     drawToolbar.appendChild(btnCancel);
     drawToolbar.appendChild(btnUndo);
     drawToolbar.appendChild(btnFinish);
-
-    var mapSection = document.getElementById("map-section");
-    console.log("map-section найден:", mapSection);
-    if (mapSection) {
-        mapSection.appendChild(drawToolbar);
-    } else {
-        document.body.appendChild(drawToolbar);
-    }
-    console.log("Тулбар создан:", drawToolbar);
+    document.getElementById("map-section").appendChild(drawToolbar);
+    
+    drawToolbar.style.display = "flex";
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+    
     return drawToolbar;
 }
 
 function updateUI() {
-    if (!drawToolbar) return;
     var counter = document.getElementById("point-counter");
-    if (counter) counter.textContent = pointCount + "/" + MAX_POINTS;
-
-    var btnFinish = drawToolbar.querySelector("button:last-child");
+    if (counter) {
+        counter.textContent = pointCount + "/" + MAX_POINTS;
+    }
+    
+    var btnFinish = document.getElementById("btn-finish-polygon");
     if (btnFinish) {
         if (pointCount >= 3) {
             btnFinish.style.opacity = "1";
             btnFinish.style.pointerEvents = "auto";
+            btnFinish.style.cursor = "pointer";
         } else {
             btnFinish.style.opacity = "0.4";
             btnFinish.style.pointerEvents = "none";
+            btnFinish.style.cursor = "default";
         }
     }
 }
 
-console.log("L.Draw.Event:", typeof L.Draw, L.Draw ? L.Draw.Event : "НЕТ");
-
-map.on("draw:drawstart", function(e) {
-    console.log("DRAWSTART сработал, тип:", e.layerType);
+// Начало рисования полигона
+map.on(L.Draw.Event.DRAWSTART, function(e) {
     if (e.layerType !== "polygon") return;
+    
     currentHandler = e.handler;
     pointCount = 0;
     createToolbar();
     updateUI();
 });
 
-map.on("draw:drawvertex", function(e) {
-    console.log("DRAWVERTEX сработал");
-    if (!currentHandler) return;
-    pointCount = e.layers.getLayers().length;
-    updateUI();
-
-    if (pointCount >= MAX_POINTS) {
-        setTimeout(function() {
-            if (currentHandler && typeof currentHandler.completeShape === "function") {
-                currentHandler.completeShape();
-            }
-        }, 50);
-    }
+// Отслеживание каждой добавленной вершины через патч обработчика
+map.on(L.Draw.Event.DRAWSTART, function(e) {
+    if (e.layerType !== "polygon") return;
+    
+    var handler = e.handler;
+    var originalAddVertex = handler._addVertex;
+    
+    handler._addVertex = function(latlng) {
+        // Вызываем оригинал
+        originalAddVertex.call(this, latlng);
+        
+        // Обновляем счётчик (проверяем реальное количество маркеров)
+        pointCount = this._markers ? this._markers.length : 0;
+        updateUI();
+        
+        // Автоматическое завершение при лимите
+        if (pointCount >= MAX_POINTS && typeof this.completeShape === "function") {
+            var self = this;
+            setTimeout(function() {
+                self.completeShape();
+            }, 100);
+        }
+    };
 });
 
-map.on("draw:drawstop", function() {
-    console.log("DRAWSTOP сработал");
-    if (drawToolbar) drawToolbar.style.display = "none";
+// Конец рисования
+map.on(L.Draw.Event.DRAWSTOP, function() {
+    var tb = document.getElementById("custom-draw-toolbar");
+    if (tb) tb.style.display = "none";
     currentHandler = null;
     pointCount = 0;
 });
 
-setInterval(function() {
-    document.querySelectorAll(".leaflet-draw-actions").forEach(function(el) { el.style.display = "none"; });
-}, 200);
-console.log("\u2705 Полигон: лимит " + MAX_POINTS + " точек, кастомный тулбар инициализирован");
+// Проверка и скрытие стандартных кнопок
+map.on(L.Draw.Event.DRAWSTOP, function() {
+    setTimeout(function() {
+        var actions = document.querySelectorAll(".leaflet-draw-actions");
+        for (var i = 0; i < actions.length; i++) {
+            actions[i].style.display = "none";
+        }
+    }, 10);
+});
 
+console.log("Полигон: лимит " + MAX_POINTS + " точек, кастомный тулбар готов");
 
 // ========== CITY ==========
 let detectedCity = "", detectedLat = 55.7558, detectedLon = 37.6173;
