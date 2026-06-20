@@ -492,6 +492,92 @@ map.on("draw:created", e => {
     state.reportCache = null;
 });
 
+// ========== ДОРАБОТКА РИСОВАНИЯ ПОЛИГОНА ==========
+const MAX_POLYGON_POINTS = 10;
+let currentDrawHandler = null;
+let drawToolbar = null;
+
+function createDrawToolbar() {
+    if (drawToolbar) removeDrawToolbar();
+
+    drawToolbar = document.createElement("div");
+    drawToolbar.className = "draw-toolbar";
+
+    const btnUndo = document.createElement("button");
+    btnUndo.innerHTML = '<i data-lucide="undo-2"></i> Удалить последнюю точку';
+    btnUndo.onclick = () => {
+        if (currentDrawHandler) currentDrawHandler.deleteLastVertex();
+    };
+
+    const btnCancel = document.createElement("button");
+    btnCancel.innerHTML = '<i data-lucide="x"></i> Отмена';
+    btnCancel.onclick = () => {
+        if (currentDrawHandler) currentDrawHandler.disable();
+    };
+
+    const btnFinish = document.createElement("button");
+    btnFinish.className = "btn-finish";
+    btnFinish.innerHTML = '<i data-lucide="check"></i> Готово';
+    btnFinish.onclick = () => {
+        if (currentDrawHandler && currentDrawHandler._markers.length >= 3) {
+            currentDrawHandler.completeShape();
+        }
+    };
+
+    drawToolbar.appendChild(btnCancel);
+    drawToolbar.appendChild(btnUndo);
+    drawToolbar.appendChild(btnFinish);
+
+    document.getElementById("map-section").appendChild(drawToolbar);
+    lucide.createIcons();
+}
+
+function removeDrawToolbar() {
+    if (drawToolbar) {
+        drawToolbar.remove();
+        drawToolbar = null;
+    }
+    currentDrawHandler = null;
+}
+
+// Патчим обработчик полигона на ограничение точек
+map.on(L.Draw.Event.DRAWSTART, e => {
+    if (e.layerType !== "polygon") return;
+
+    currentDrawHandler = e.handler;
+    createDrawToolbar();
+
+    // Переопределяем обработчик клика чтобы ограничивать количество точек
+    const originalAddVertex = currentDrawHandler._onClick;
+    currentDrawHandler._onClick = function(evt) {
+
+        // Если уже 10 точек - автоматически завершаем рисование
+        if (this._markers.length >= MAX_POLYGON_POINTS - 1) {
+            this.completeShape();
+            addBotMessage("✅ Максимальное количество точек: 10");
+            return;
+        }
+
+        originalAddVertex.call(this, evt);
+    }
+});
+
+map.on(L.Draw.Event.DRAWSTOP, () => {
+    removeDrawToolbar();
+});
+
+map.on("draw:vertexdeleted", () => {
+    // если удалили точку и осталось меньше 3 - скрываем кнопку готово
+    if (drawToolbar && currentDrawHandler) {
+        const btnFinish = drawToolbar.querySelector(".btn-finish");
+        btnFinish.style.opacity = currentDrawHandler._markers.length >= 3 ? "1" : "0.4";
+        btnFinish.disabled = currentDrawHandler._markers.length < 3;
+    }
+})
+
+console.log("✅ Инструмент рисования полигона доработан");
+
+
 // ========== CITY ==========
 let detectedCity = "", detectedLat = 55.7558, detectedLon = 37.6173;
 let cityInitTimeout = null;
@@ -502,7 +588,7 @@ function initCity() {
         const d = JSON.parse(saved);
         map.setView([d.lat, d.lon], 13);
         document.getElementById("city-modal").style.display = "none";
-        addBotMessage("Привет! Я AI-урбанист\n\nГород: " + d.name + "\n\nНа карте выберите:\n▢ прямоугольник  ⬡ многоугольник\n→ нажмите «Анализ»");
+        addBotMessage("Привет! Я AI-урбанист\n\nГород: " + d.name + "\n\nВыберите интересующую вас область с помощью:\n⬡ многоугольника или ▢ прямоугольника с левой стороны карты\n→ далее нажмите «Анализ»");
         return;
     }
     document.getElementById("city-modal").style.display = "flex";
@@ -551,14 +637,14 @@ function confirmCity() {
     localStorage.setItem("qp_city", JSON.stringify({ name: detectedCity, lat: detectedLat, lon: detectedLon }));
     map.setView([detectedLat, detectedLon], 13);
     document.getElementById("city-modal").style.display = "none";
-    addBotMessage("Привет! Я AI-урбанист\n\nГород: " + detectedCity + "\n\nНа карте выберите:\n▢ прямоугольник  ⬡ многоугольник\n→ нажмите «Анализ»");
+    addBotMessage("Привет! Я AI-урбанист\n\nГород: " + detectedCity + "\n\nВыберите интересующую вас область с помощью:\n⬡ многоугольника или ▢ прямоугольника с левой стороны карты\n→ далее нажмите «Анализ»");
 }
 function skipCity() {
     clearTimeout(cityInitTimeout);
     localStorage.setItem("qp_city", JSON.stringify({ name: "Москва", lat: 55.7558, lon: 37.6173 }));
     map.setView([55.7558, 37.6173], 13);
     document.getElementById("city-modal").style.display = "none";
-    addBotMessage("Привет!\n\nНа карте выберите:\n▢ прямоугольник  ⬡ многоугольник\n→ нажмите «Анализ»");
+    addBotMessage("Привет!\n\nВыберите интересующую вас область с помощью:\n⬡ многоугольника или ▢ прямоугольника с левой стороны карты\n→ далее нажмите «Анализ»");
 }
 async function searchAndGoCity() {
     const q = document.getElementById("city-input").value.trim();
