@@ -494,88 +494,141 @@ map.on("draw:created", e => {
 
 // ========== ДОРАБОТКА РИСОВАНИЯ ПОЛИГОНА ==========
 const MAX_POLYGON_POINTS = 10;
-let currentDrawHandler = null;
 let drawToolbar = null;
 
-function createDrawToolbar() {
-    if (drawToolbar) removeDrawToolbar();
+function buildDrawToolbar() {
+    if (drawToolbar) return drawToolbar;
 
     drawToolbar = document.createElement("div");
-    drawToolbar.className = "draw-toolbar";
+    drawToolbar.style.cssText = `
+        position: absolute;
+        bottom: 24px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 1500;
+        display: none;
+        gap: 8px;
+        padding: 10px 14px;
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        box-shadow: 0 10px 40px rgba(0,0,0,0.4);
+        backdrop-filter: blur(10px);
+        animation: slideUp 0.2s ease;
+    `;
 
-    const btnUndo = document.createElement("button");
-    btnUndo.innerHTML = '<i data-lucide="undo-2"></i> Удалить последнюю точку';
-    btnUndo.onclick = () => {
-        if (currentDrawHandler) currentDrawHandler.deleteLastVertex();
-    };
-
+    // Кнопка Отмена
     const btnCancel = document.createElement("button");
-    btnCancel.innerHTML = '<i data-lucide="x"></i> Отмена';
-    btnCancel.onclick = () => {
-        if (currentDrawHandler) currentDrawHandler.disable();
-    };
+    btnCancel.style.cssText = `
+        padding: 8px 16px;
+        border-radius: 8px;
+        border: 1px solid var(--border);
+        background: var(--secondary);
+        color: var(--foreground);
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-family: inherit;
+        transition: all 0.15s;
+    `;
+    btnCancel.innerHTML = "✕ Отмена";
+    btnCancel.onmouseenter = () => btnCancel.style.background = "var(--accent)";
+    btnCancel.onmouseleave = () => btnCancel.style.background = "var(--secondary)";
+    btnCancel.onclick = () => drawControl._toolbars.draw._activeMode.handler.disable();
 
+    // Кнопка Удалить точку
+    const btnUndo = document.createElement("button");
+    btnUndo.style.cssText = btnCancel.style.cssText;
+    btnUndo.innerHTML = "↶ Удалить последнюю точку";
+    btnUndo.onmouseenter = () => btnUndo.style.background = "var(--accent)";
+    btnUndo.onmouseleave = () => btnUndo.style.background = "var(--secondary)";
+    btnUndo.onclick = () => drawControl._toolbars.draw._activeMode.handler.deleteLastVertex();
+
+    // Кнопка Готово
     const btnFinish = document.createElement("button");
-    btnFinish.className = "btn-finish";
-    btnFinish.innerHTML = '<i data-lucide="check"></i> Готово';
+    btnFinish.style.cssText = `
+        padding: 8px 16px;
+        border-radius: 8px;
+        border: none;
+        background: var(--primary);
+        color: white;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-family: inherit;
+        transition: opacity 0.15s;
+        opacity: 0.4;
+        pointer-events: none;
+    `;
+    btnFinish.innerHTML = "✓ Готово";
+    btnFinish.onmouseenter = () => btnFinish.style.opacity = "0.9";
+    btnFinish.onmouseleave = () => btnFinish.style.opacity = "1";
     btnFinish.onclick = () => {
-        if (currentDrawHandler && currentDrawHandler._markers.length >= 3) {
-            currentDrawHandler.completeShape();
-        }
+        const h = drawControl._toolbars.draw._activeMode.handler;
+        if (h._markers.length >= 3) h.completeShape();
     };
 
     drawToolbar.appendChild(btnCancel);
     drawToolbar.appendChild(btnUndo);
     drawToolbar.appendChild(btnFinish);
-
     document.getElementById("map-section").appendChild(drawToolbar);
+
+    // Скрываем стандартные ужасные кнопки Leaflet Draw
+    const hideDefault = () => {
+        document.querySelectorAll(".leaflet-draw-actions").forEach(el => el.style.display = "none");
+    };
+    setInterval(hideDefault, 100);
+
+    return drawToolbar;
+}
+
+buildDrawToolbar();
+
+// При начале рисования - показываем тулбар
+map.on(L.Draw.Event.DRAWSTART, (e) => {
+    if (e.layerType !== "polygon") {
+        drawToolbar.style.display = "none";
+        return;
+    }
+    drawToolbar.style.display = "flex";
     lucide.createIcons();
-}
+});
 
-function removeDrawToolbar() {
-    if (drawToolbar) {
-        drawToolbar.remove();
-        drawToolbar = null;
+// При добавлении каждой точки - проверяем лимит и состояние кнопки Готово
+map.on(L.Draw.Event.DRAWVERTEX, (e) => {
+    const handler = drawControl._toolbars.draw._activeMode.handler;
+    const pointCount = handler._markers.length;
+    const btnFinish = drawToolbar.querySelector("button:last-child");
+
+    // Активируем кнопку Готово если есть минимум 3 точки
+    if (pointCount >= 3) {
+        btnFinish.style.opacity = "1";
+        btnFinish.style.pointerEvents = "auto";
+    } else {
+        btnFinish.style.opacity = "0.4";
+        btnFinish.style.pointerEvents = "none";
     }
-    currentDrawHandler = null;
-}
 
-// Патчим обработчик полигона на ограничение точек
-map.on(L.Draw.Event.DRAWSTART, e => {
-    if (e.layerType !== "polygon") return;
-
-    currentDrawHandler = e.handler;
-    createDrawToolbar();
-
-    // Переопределяем обработчик клика чтобы ограничивать количество точек
-    const originalAddVertex = currentDrawHandler._onClick;
-    currentDrawHandler._onClick = function(evt) {
-
-        // Если уже 10 точек - автоматически завершаем рисование
-        if (this._markers.length >= MAX_POLYGON_POINTS - 1) {
-            this.completeShape();
+    // Если достигли максимума 10 точек - автоматически завершаем рисование
+    if (pointCount >= MAX_POLYGON_POINTS) {
+        setTimeout(() => {
+            handler.completeShape();
             addBotMessage("✅ Максимальное количество точек: 10");
-            return;
-        }
-
-        originalAddVertex.call(this, evt);
+        }, 100);
     }
 });
 
+// При окончании/отмене рисования - скрываем тулбар
 map.on(L.Draw.Event.DRAWSTOP, () => {
-    removeDrawToolbar();
+    drawToolbar.style.display = "none";
 });
-
-map.on("draw:vertexdeleted", () => {
-    // если удалили точку и осталось меньше 3 - скрываем кнопку готово
-    if (drawToolbar && currentDrawHandler) {
-        const btnFinish = drawToolbar.querySelector(".btn-finish");
-        btnFinish.style.opacity = currentDrawHandler._markers.length >= 3 ? "1" : "0.4";
-        btnFinish.disabled = currentDrawHandler._markers.length < 3;
-    }
-})
-
-console.log("✅ Инструмент рисования полигона доработан");
+map.on(L.Draw.Event.DRAWVERTEX, () => {});
 
 
 // ========== CITY ==========
