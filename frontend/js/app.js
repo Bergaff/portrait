@@ -502,7 +502,7 @@ function initCity() {
         const d = JSON.parse(saved);
         map.setView([d.lat, d.lon], 13);
         document.getElementById("city-modal").style.display = "none";
-        addBotMessage("Привет! Я AI-урбанист\n\nГород: " + d.name + "\n\nВыделите область на карте → нажмите «Анализировать»");
+        addBotMessage("Привет! Я AI-урбанист\n\nГород: " + d.name + "\n\nНа карте выберите:\n▢ прямоугольник  ⬡ многоугольник\n→ нажмите «Анализ»");
         return;
     }
     document.getElementById("city-modal").style.display = "flex";
@@ -551,14 +551,14 @@ function confirmCity() {
     localStorage.setItem("qp_city", JSON.stringify({ name: detectedCity, lat: detectedLat, lon: detectedLon }));
     map.setView([detectedLat, detectedLon], 13);
     document.getElementById("city-modal").style.display = "none";
-    addBotMessage("Привет! Я AI-урбанист\n\nГород: " + detectedCity + "\n\nВыделите область → «Анализировать»");
+    addBotMessage("Привет! Я AI-урбанист\n\nГород: " + detectedCity + "\n\nНа карте выберите:\n▢ прямоугольник  ⬡ многоугольник\n→ нажмите «Анализ»");
 }
 function skipCity() {
     clearTimeout(cityInitTimeout);
     localStorage.setItem("qp_city", JSON.stringify({ name: "Москва", lat: 55.7558, lon: 37.6173 }));
     map.setView([55.7558, 37.6173], 13);
     document.getElementById("city-modal").style.display = "none";
-    addBotMessage("Привет! Выделите область на карте.");
+    addBotMessage("Привет!\n\nНа карте выберите:\n▢ прямоугольник  ⬡ многоугольник\n→ нажмите «Анализ»");
 }
 async function searchAndGoCity() {
     const q = document.getElementById("city-input").value.trim();
