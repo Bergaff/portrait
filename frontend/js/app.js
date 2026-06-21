@@ -1,4 +1,4 @@
-      const APP_VERSION = "1.0";
+const APP_VERSION = "1.0";
 
 // ========== ТЕМА ==========
 function toggleTheme() {
@@ -511,7 +511,6 @@ function updateUI() {
     btnCancel.style.pointerEvents = "auto";
   }
 
-  // Кнопка "Удалить точку" только для полигона
   if (btnUndo) {
       btnUndo.style.display = currentMode === "rectangle" ? "none" : "flex";
   }
@@ -715,8 +714,7 @@ map.on("draw:deleted", function(e) {
   drawnItems.clearLayers();
   state.bbox = null;
   state.drawnLayer = null;
-  
-  // Принудительно очищаем внутренний кэш Leaflet.Draw для редактирования
+
   if (drawControl && drawControl._toolbars && drawControl._toolbars.edit && drawControl._toolbars.edit._modes && drawControl._toolbars.edit._modes.remove) {
      try {
        drawControl._toolbars.edit._modes.remove.handler.removeAllLayers();
@@ -764,7 +762,8 @@ function initCity() {
 ⬡ многоугольника или ▢ прямоугольника с левой стороны карты
 → далее нажмите «Анализ»
 
-Вы можете изменить точки области или удалить неудачную через меню редактирования.");        return;
+Вы можете изменить точки области или удалить неудачную через меню редактирования.");
+        return;
     }
     document.getElementById("city-modal").style.display = "flex";
     cityInitTimeout = setTimeout(() => { if (!detectedCity) showCityInput(); }, 12000);
@@ -812,8 +811,6 @@ window.confirmCity = function() {
   localStorage.setItem("qp_city", JSON.stringify({ name: detectedCity, lat: detectedLat, lon: detectedLon }));
   map.setView([detectedLat, detectedLon], 13);
   document.getElementById("city-modal").style.display = "none";
-  
-  // ✅ Используем обратные кавычки ` и вставку ${detectedCity}
   addBotMessage(`Привет! Я AI-урбанист
 
 Город: ${detectedCity}
@@ -823,22 +820,22 @@ window.confirmCity = function() {
 → далее нажмите «Анализ»
 
 Вы можете изменить точки области или удалить неудачную через меню редактирования.`);
-}
+};
 window.skipCity = function() {
   clearTimeout(cityInitTimeout);
   localStorage.setItem("qp_city", JSON.stringify({ name: "Москва", lat: 55.7558, lon: 37.6173 }));
   map.setView([55.7558, 37.6173], 13);
   document.getElementById("city-modal").style.display = "none";
-  addBotMessage("Привет! Я AI-урбанист
+  addBotMessage(`Привет! Я AI-урбанист
 
 Город: Москва
 
 Выберите интересующую вас область с помощью:
 ⬡ многоугольника или ▢ прямоугольника с левой стороны карты
-→ далее нажмите «Анализ
+→ далее нажмите «Анализ»
 
-Вы можете изменить точки области или удалить неудачную через меню редактирования.");
-}
+Вы можете изменить точки области или удалить неудачную через меню редактирования.`);
+};
 async function searchAndGoCity() {
     const q = document.getElementById("city-input").value.trim();
     if (!q) return;
@@ -1621,4 +1618,3 @@ function markdownToHtml(t) {
 }
 
 setTimeout(() => lucide.createIcons(), 100);
-
