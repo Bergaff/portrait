@@ -806,55 +806,63 @@ function showCityInput() {
     document.getElementById("city-confirm").style.display = "none";
     document.getElementById("city-input-block").style.display = "block";
 }
-// Глобализация функций для HTML-вызовов
-window.confirmCity = window.confirmCity || function() {
+window.confirmCity = function() {
   clearTimeout(cityInitTimeout);
   localStorage.setItem("qp_city", JSON.stringify({ name: detectedCity, lat: detectedLat, lon: detectedLon }));
   map.setView([detectedLat, detectedLon], 13);
-  document.getElementById("city-modal").style.display = "none";
-  addBotMessage(`Привет! Я AI-урбанист
+  
+  const modal = document.getElementById("city-modal");
+  if (modal) {
+    modal.style.display = "none";
+  }
+  
+  const msg = 
+    "Привет! Я AI-урбанист
 
-Город: ${detectedCity}
+" +
+    "Город: " + detectedCity + "
 
-Выберите интересующую вас область с помощью:
-⬡ многоугольника или ▢ прямоугольника с левой стороны карты
-→ далее нажмите «Анализ»
+" +
+    "Выберите интересующую вас область с помощью:
+" +
+    "⬡ многоугольника или ▢ прямоугольника с левой стороны карты
+" +
+    "→ далее нажмите Анализ
 
-Вы можете изменить точки области или удалить неудачную через меню редактирования.`);
+" +
+    "Вы можете изменить точки области или удалить неудачную через меню редактирования.";
+  
+  addBotMessage(msg);
 };
 
 window.skipCity = function() {
-    if (typeof cityInitTimeout !== 'undefined') {
-        clearTimeout(cityInitTimeout);
-    }
-    localStorage.setItem("qp_city", JSON.stringify({ name: "Москва", lat: 55.7558, lon: 37.6173 }));
-    if (typeof map !== 'undefined') {
-        map.setView([55.7558, 37.6173], 13);
-    }
-    var modal = document.getElementById("city-modal");
-    if (modal) {
-        modal.style.display = "none";
-    }
-    
-    // Безопасная строка без использования обратных кавычек, которая не ломает Python-скрипт
-    var msg = "Привет! Я AI-урбанист
+  clearTimeout(cityInitTimeout);
+  
+  localStorage.setItem("qp_city", JSON.stringify({ name: "Москва", lat: 55.7558, lon: 37.6173 }));
+  map.setView([55.7558, 37.6173], 13);
+  
+  const modal = document.getElementById("city-modal");
+  if (modal) {
+    modal.style.display = "none";
+  }
+  
+  const msg = 
+    "Привет! Я AI-урбанист
 
 " +
-              "Город: Москва
+    "Город: Москва
 
 " +
-              "Выберите интересующую вас область с помощью:
+    "Выберите интересующую вас область с помощью:
 " +
-              "⬡ многоугольника или ▢ прямоугольника с левой стороны карты
+    "⬡ многоугольника или ▢ прямоугольника с левой стороны карты
 " +
-              "→ далее нажмите «Анализ»
+    "→ далее нажмите Анализ
 
 " +
-              "Вы можете изменить точки области или удалить неудачную через меню редактирования.";
-              
-    if (typeof addBotMessage === 'function') {
-        addBotMessage(msg);
-    }
+    "Вы можете изменить точки области или удалить неудачную через меню редактирования.";
+  
+  addBotMessage(msg);
 };
 
 window.showCityInput = window.showCityInput || function() {
