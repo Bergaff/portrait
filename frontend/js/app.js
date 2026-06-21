@@ -806,7 +806,8 @@ function showCityInput() {
     document.getElementById("city-confirm").style.display = "none";
     document.getElementById("city-input-block").style.display = "block";
 }
-window.confirmCity = function() {
+// Глобализация функций для HTML-вызовов
+window.confirmCity = window.confirmCity || function() {
   clearTimeout(cityInitTimeout);
   localStorage.setItem("qp_city", JSON.stringify({ name: detectedCity, lat: detectedLat, lon: detectedLon }));
   map.setView([detectedLat, detectedLon], 13);
@@ -821,7 +822,8 @@ window.confirmCity = function() {
 
 Вы можете изменить точки области или удалить неудачную через меню редактирования.`);
 };
-window.skipCity = function() {
+
+window.skipCity = window.skipCity || function() {
   clearTimeout(cityInitTimeout);
   localStorage.setItem("qp_city", JSON.stringify({ name: "Москва", lat: 55.7558, lon: 37.6173 }));
   map.setView([55.7558, 37.6173], 13);
@@ -836,21 +838,28 @@ window.skipCity = function() {
 
 Вы можете изменить точки области или удалить неудачную через меню редактирования.`);
 };
-async function searchAndGoCity() {
-    const q = document.getElementById("city-input").value.trim();
-    if (!q) return;
-    try {
-        const r = await fetch("/api/search?q=" + encodeURIComponent(q));
-        const d = await r.json();
-        if (d.results?.length > 0) {
-            detectedLat = d.results[0].lat;
-            detectedLon = d.results[0].lon;
-            detectedCity = d.results[0].display_name.split(",")[0];
-        }
-    } catch (e) {}
-    confirmCity();
-}
-initCity();
+
+window.showCityInput = window.showCityInput || function() {
+  clearTimeout(cityInitTimeout);
+  document.getElementById("city-detecting").style.display = "none";
+  document.getElementById("city-confirm").style.display = "none";
+  document.getElementById("city-input-block").style.display = "block";
+};
+
+window.searchAndGoCity = window.searchAndGoCity || async function() {
+  const q = document.getElementById("city-input").value.trim();
+  if (!q) return;
+  try {
+    const r = await fetch("/api/search?q=" + encodeURIComponent(q));
+    const d = await r.json();
+    if (d.results?.length > 0) {
+      detectedLat = d.results[0].lat;
+      detectedLon = d.results[0].lon;
+      detectedCity = d.results[0].display_name.split(",")[0];
+    }
+  } catch (e) {}
+  window.confirmCity();
+};
 
 // ========== SEARCH ==========
 let searchTimeout;
