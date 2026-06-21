@@ -494,6 +494,7 @@ function updateUI() {
 
   const btnFinish = document.getElementById("btn-finish-polygon");
   const btnCancel = document.getElementById("btn-cancel-polygon");
+  const btnUndo = document.getElementById("btn-undo-polygon");
 
   if (btnFinish) {
     if (pointCount >= getMinFinishPoints()) {
@@ -509,12 +510,12 @@ function updateUI() {
     btnCancel.style.opacity = "1";
     btnCancel.style.pointerEvents = "auto";
   }
+
+  // Кнопка "Удалить точку" только для полигона
+  if (btnUndo) {
+      btnUndo.style.display = currentMode === "rectangle" ? "none" : "flex";
+  }
 }
-    // Кнопка "Удалить точку" только для полигона
-    const btnUndo = document.getElementById("btn-undo-polygon");
-    if (btnUndo) {
-        btnUndo.style.display = currentMode === "rectangle" ? "none" : "flex";
-    }
 
 function createToolbar() {
     if (drawToolbar) {
@@ -656,8 +657,6 @@ function patchRectangleTool() {
         pointCount = 2;
         updateUI();
         if (typeof this._drawShape === "function") this._drawShape(e.latlng);
-        if (typeof this._fireCreatedEvent === "function") this._fireCreatedEvent();
-        this.disable();
     };
 
     RP._onQPMove = function(e) {
