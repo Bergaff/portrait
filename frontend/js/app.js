@@ -488,21 +488,28 @@ function getMinFinishPoints() {
 }
 
 function updateUI() {
-    if (!drawToolbar) return;
-    const counter = document.getElementById("point-counter");
-    if (counter) counter.textContent = pointCount + "/" + getMaxPoints();
-    const btnFinish = document.getElementById("btn-finish-polygon");
-    if (btnFinish) {
-        if (pointCount >= getMinFinishPoints()) {
-            btnFinish.style.opacity = "1";
-            btnFinish.style.pointerEvents = "auto";
-            btnFinish.style.cursor = "pointer";
-        } else {
-            btnFinish.style.opacity = "0.4";
-            btnFinish.style.pointerEvents = "none";
-            btnFinish.style.cursor = "default";
-        }
+  if (!drawToolbar) return;
+  const counter = document.getElementById("point-counter");
+  if (counter) counter.textContent = pointCount + "/" + getMaxPoints();
+
+  const btnFinish = document.getElementById("btn-finish-polygon");
+  const btnCancel = document.getElementById("btn-cancel-polygon");
+
+  if (btnFinish) {
+    if (pointCount >= getMinFinishPoints()) {
+      btnFinish.style.opacity = "1";
+      btnFinish.style.pointerEvents = "auto";
+    } else {
+      btnFinish.style.opacity = "0.4";
+      btnFinish.style.pointerEvents = "none";
     }
+  }
+
+  if (btnCancel) {
+    btnCancel.style.opacity = "1";
+    btnCancel.style.pointerEvents = "auto";
+  }
+}
     // Кнопка "Удалить точку" только для полигона
     const btnUndo = document.getElementById("btn-undo-polygon");
     if (btnUndo) {
@@ -706,13 +713,20 @@ map.on(L.Draw.Event.DRAWSTOP, function() {
     }, 10);
 });
 
-map.on("draw:deleted", function() {
-    drawnItems.clearLayers();
-    state.drawnLayer = null;
-    state.bbox = null;
-    clearAnalysisUI();
-    hideToolbar();
-    addBotMessage("🗑 Область удалена. Теперь можно выбрать новую.");
+map.on("draw:deleted", function(e) {
+  drawnItems.clearLayers();
+  state.bbox = null;
+  state.drawnLayer = null;
+  
+  // Принудительно очищаем внутренний кэш Leaflet.Draw для редактирования
+  if (drawControl && drawControl._toolbars && drawControl._toolbars.edit && drawControl._toolbars.edit._modes && drawControl._toolbars.edit._modes.remove) {
+     try {
+       drawControl._toolbars.edit._modes.remove.handler.removeAllLayers();
+     } catch(err) { console.log(err); }
+  }
+
+  document.getElementById("actions-panel").style.display = "none";
+  addBotMessage("Область удалена. Теперь можно выбрать новую.");
 });
 
 map.on("draw:edited", function(e) {
