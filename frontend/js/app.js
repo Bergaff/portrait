@@ -1,5 +1,4 @@
-// ========== ВЕРСИЯ ==========
-const APP_VERSION = "1.0";
+        const APP_VERSION = "1.0";
 
 // ========== ТЕМА ==========
 function toggleTheme() {
@@ -7,7 +6,6 @@ function toggleTheme() {
     const newTheme = cur === "dark" ? "light" : "dark";
     document.body.setAttribute("data-theme", newTheme);
     localStorage.setItem("qp_theme", newTheme);
-    // Перерисовываем карту с новыми тайлами
     if (window.currentTileLayer) map.removeLayer(window.currentTileLayer);
     const tileUrl = newTheme === "light"
         ? "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
@@ -36,7 +34,6 @@ async function initAuth() {
     } catch (e) {
         console.warn("Supabase недоступен:", e);
         updateAuthUILoggedOut();
-        // Показываем плашку только один раз
         if (!localStorage.getItem("qp_supabase_warned")) {
             setTimeout(() => addBotMessage("⚠ Сервис авторизации временно недоступен. Анализ работает без входа."), 1500);
             localStorage.setItem("qp_supabase_warned", "1");
@@ -95,7 +92,7 @@ function processOAuthCallback() {
         return;
     }
     if (code && sp.get("state") === "mailru") {
-        saveMapPosition(); // ← сохраняем позицию
+        saveMapPosition();
         window.history.replaceState({}, document.title, window.location.pathname);
         showAuthError("Входим через Mail.ru...");
         fetch("/api/auth/mailru", {
@@ -111,7 +108,7 @@ function processOAuthCallback() {
     }
     const at = hp.get("access_token");
     if (at && hp.get("state") === "yandex") {
-        saveMapPosition(); // ← сохраняем позицию
+        saveMapPosition();
         window.location.hash = "";
         showAuthError("Входим через Яндекс...");
         fetch("/api/auth/yandex", {
@@ -184,7 +181,6 @@ function openProfile() {
     const container = document.getElementById("profile-content");
     container.innerHTML = "";
 
-    // Базовая информация
     const info = document.createElement("div");
     info.innerHTML =
         '<div class="profile-row"><span class="profile-label">Email</span><span>' + (currentUser.email || "—") + '</span></div>' +
@@ -193,7 +189,6 @@ function openProfile() {
         '<div class="profile-row"><span class="profile-label">Запросов</span><span>' + userStats.requests + '</span></div>';
     container.appendChild(info);
 
-    // История
     const history = JSON.parse(localStorage.getItem(getHistoryKey()) || "[]");
 
     const histHeader = document.createElement("div");
@@ -228,7 +223,6 @@ function openProfile() {
             const histItem = document.createElement("div");
             histItem.className = "history-item";
 
-            // Основной контент (кликабельная зона)
             const itemContent = document.createElement("div");
             itemContent.className = "history-item-content";
             itemContent.style.cssText = "flex:1;cursor:pointer;min-width:0";
@@ -237,7 +231,6 @@ function openProfile() {
                 '<div class="history-item-meta"><span>' + dtStr + '</span><span>' + (item.mode || "free") + '</span></div>';
             itemContent.onclick = function() { loadFromHistory(idx); };
 
-            // Кнопка удаления
             const delBtn = document.createElement("button");
             delBtn.className = "history-item-del";
             delBtn.title = "Удалить запись";
@@ -271,14 +264,11 @@ function saveToHistory(mode, placesCount, score) {
 
     const center = state.drawnLayer ? state.drawnLayer.getBounds().getCenter() : null;
 
-    // Сохраняем полную геометрию выделения
     let shapeData = null;
     if (state.drawnLayer) {
         try {
-            // Определяем тип: прямоугольник или полигон
             const isRectangle = state.drawnLayer instanceof L.Rectangle;
             const latlngs = state.drawnLayer.getLatLngs();
-            // Нормализуем структуру координат
             const points = (latlngs[0] || latlngs).map(p => ({ lat: p.lat, lng: p.lng }));
             shapeData = {
                 type: isRectangle ? "rectangle" : "polygon",
@@ -322,24 +312,20 @@ function loadFromHistory(idx) {
     state.categories = h.categories || {};
     state.reportCache = null;
 
-    // Восстанавливаем форму на карте
     drawnItems.clearLayers();
     let shape = null;
 
     if (h.shape && h.shape.points && h.shape.points.length >= 2) {
-        // Используем сохранённую полную форму
         const latlngs = h.shape.points.map(p => [p.lat, p.lng]);
         const style = { color: "#7c5cff", fillOpacity: 0.15, weight: 2 };
 
         if (h.shape.type === "polygon") {
             shape = L.polygon(latlngs, style);
         } else {
-            // rectangle
             const bounds = L.latLngBounds(latlngs);
             shape = L.rectangle(bounds, style);
         }
     } else if (h.bbox) {
-        // Fallback на старые записи без shape
         const parts = h.bbox.split(",").map(parseFloat);
         shape = L.rectangle([[parts[0], parts[1]], [parts[2], parts[3]]], {
             color: "#7c5cff", fillOpacity: 0.15, weight: 2
@@ -352,7 +338,6 @@ function loadFromHistory(idx) {
         map.fitBounds(shape.getBounds());
     }
 
-    // Перерисовываем слои
     if (state.heatLayer) { map.removeLayer(state.heatLayer); }
     if (state.markersLayer) { map.removeLayer(state.markersLayer); }
     if (state.scrapedMarkersLayer) { map.removeLayer(state.scrapedMarkersLayer); }
@@ -382,13 +367,13 @@ function clearHistory() {
 }
 
 function deleteHistoryItem(idx, event) {
-    if (event) event.stopPropagation(); // не открывать запись при клике на удалить
+    if (event) event.stopPropagation();
     const key = getHistoryKey();
     let history = JSON.parse(localStorage.getItem(key) || "[]");
     if (!history[idx]) return;
     history.splice(idx, 1);
     localStorage.setItem(key, JSON.stringify(history));
-    openProfile(); // перерисовываем список
+    openProfile();
 }
 
 // ========== STATE ==========
@@ -399,9 +384,7 @@ let state = {
     activeFilter: null, reportCache: null, chatBusy: false,
     scrapedData: [], scrapeRunId: null, scrapeEnriched: false, drawnLayer: null
 };
-// Глобальные переменные для поллинга
 let scrapingPollInterval = null;
-
 
 // ========== RESIZER ==========
 let isResizing = false;
@@ -444,7 +427,6 @@ window.currentTileLayer = L.tileLayer(initTileUrl, {
     attribution: "OpenStreetMap, CARTO", maxZoom: 19
 }).addTo(map);
 window.map = map;
-// Восстанавливаем позицию карты после reload (после авторизации)
 const savedPos = localStorage.getItem("qp_map_pos");
 if (savedPos) {
     try {
@@ -454,13 +436,12 @@ if (savedPos) {
     } catch (e) {}
 }
 
-// Локализация инструментов рисования на русском
 L.drawLocal.draw.toolbar.buttons.polygon = "Выбрать область многоугольником";
 L.drawLocal.draw.toolbar.buttons.rectangle = "Выбрать область прямоугольником";
 L.drawLocal.draw.handlers.polygon.tooltip.start = "Кликайте, чтобы рисовать многоугольник";
 L.drawLocal.draw.handlers.polygon.tooltip.cont = "Кликайте, чтобы продолжить рисование";
 L.drawLocal.draw.handlers.polygon.tooltip.end = "Кликните первую точку, чтобы завершить";
-L.drawLocal.draw.handlers.rectangle.tooltip.start = "Зажмите мышь и тяните, чтобы выделить прямоугольник";
+L.drawLocal.draw.handlers.rectangle.tooltip.start = "Кликните дважды: первая и вторая точка";
 L.drawLocal.edit.toolbar.buttons.edit = "Редактировать область";
 L.drawLocal.edit.toolbar.buttons.editDisabled = "Нет областей для редактирования";
 L.drawLocal.edit.toolbar.buttons.remove = "Удалить область";
@@ -485,37 +466,32 @@ map.addControl(drawControl);
 map.on("draw:created", e => {
     drawnItems.clearLayers();
     drawnItems.addLayer(e.layer);
-    state.drawnLayer = e.layer; // сохраняем для проверки point-in-polygon
+    state.drawnLayer = e.layer;
     const b = e.layer.getBounds();
     state.bbox = b.getSouth() + "," + b.getWest() + "," + b.getNorth() + "," + b.getEast();
     document.getElementById("actions-panel").style.display = "flex";
     state.reportCache = null;
 });
 
-// ========== ДОРАБОТКА РИСОВАНИЯ ПОЛИГОНА ==========
+// ========== ДОРАБОТКА РИСОВАНИЯ ПОЛИГОНА И ПРЯМОУГОЛЬНИКА ==========
 const MAX_POINTS = 10;
-var drawToolbar = null;
-var currentHandler = null;
-var currentMode = "";
-var pointCount = 0;
+let drawToolbar = null;
+let currentHandler = null;
+let currentMode = "";
+let pointCount = 0;
 
 function getMaxPoints() {
     return currentMode === "rectangle" ? 2 : MAX_POINTS;
 }
-
 function getMinFinishPoints() {
     return currentMode === "rectangle" ? 2 : 3;
 }
 
 function updateUI() {
     if (!drawToolbar) return;
-
-    var counter = document.getElementById("point-counter");
-    if (counter) {
-        counter.textContent = pointCount + "/" + getMaxPoints();
-    }
-
-    var btnFinish = document.getElementById("btn-finish-polygon");
+    const counter = document.getElementById("point-counter");
+    if (counter) counter.textContent = pointCount + "/" + getMaxPoints();
+    const btnFinish = document.getElementById("btn-finish-polygon");
     if (btnFinish) {
         if (pointCount >= getMinFinishPoints()) {
             btnFinish.style.opacity = "1";
@@ -526,6 +502,11 @@ function updateUI() {
             btnFinish.style.pointerEvents = "none";
             btnFinish.style.cursor = "default";
         }
+    }
+    // Кнопка "Удалить точку" только для полигона
+    const btnUndo = document.getElementById("btn-undo-polygon");
+    if (btnUndo) {
+        btnUndo.style.display = currentMode === "rectangle" ? "none" : "flex";
     }
 }
 
@@ -541,44 +522,46 @@ function createToolbar() {
     drawToolbar.id = "custom-draw-toolbar";
     drawToolbar.style.cssText = "position:absolute;bottom:32px;left:50%;transform:translateX(-50%);z-index:99999;display:flex;gap:8px;padding:10px 14px;background:var(--card,#222);border:1px solid var(--border,#444);border-radius:12px;box-shadow:0 10px 40px rgba(0,0,0,0.4);pointer-events:auto;";
 
-    var btnStyle = "padding:8px 16px;border-radius:8px;border:1px solid var(--border,#444);background:var(--secondary,#333);color:var(--foreground,#fff);font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;font-family:inherit;transition:all 0.15s;";
+    const baseBtn = "padding:8px 16px;border-radius:8px;border:1px solid var(--border,#444);background:var(--secondary,#333);color:var(--foreground,#fff);font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;font-family:inherit;transition:all 0.15s;";
 
-    var btnCancel = document.createElement("button");
-    btnCancel.style.cssText = btnStyle;
-    btnCancel.textContent = "✕ Отмена";
+    const btnCancel = document.createElement("button");
+    btnCancel.style.cssText = baseBtn;
+    btnCancel.innerHTML = "✕ Отмена";
     btnCancel.onmouseenter = function() { this.style.background = "var(--accent)"; };
     btnCancel.onmouseleave = function() { this.style.background = "var(--secondary)"; };
-    btnCancel.onclick = function() {
-        if (currentHandler && currentHandler.disable) {
-            currentHandler.disable();
-        }
+    btnCancel.onclick = function(e) {
+        e.stopPropagation();
+        if (currentHandler && currentHandler.disable) currentHandler.disable();
     };
 
-    var btnUndo = document.createElement("button");
-    btnUndo.style.cssText = btnStyle;
-    btnUndo.textContent = "↶ Удалить точку";
+    const btnUndo = document.createElement("button");
+    btnUndo.id = "btn-undo-polygon";
+    btnUndo.style.cssText = baseBtn;
+    btnUndo.innerHTML = "↶ Удалить точку";
     btnUndo.onmouseenter = function() { this.style.background = "var(--accent)"; };
     btnUndo.onmouseleave = function() { this.style.background = "var(--secondary)"; };
-    btnUndo.onclick = function() {
-        if (currentHandler && typeof currentHandler.deleteLastVertex === "function") {
+    btnUndo.onclick = function(e) {
+        e.stopPropagation();
+        if (currentHandler && currentMode === "polygon" && typeof currentHandler.deleteLastVertex === "function") {
             currentHandler.deleteLastVertex();
             pointCount = Math.max(0, pointCount - 1);
             updateUI();
         }
     };
 
-    var btnFinish = document.createElement("button");
+    const btnFinish = document.createElement("button");
     btnFinish.id = "btn-finish-polygon";
     btnFinish.style.cssText = "padding:8px 16px;border-radius:8px;border:none;background:var(--primary);color:white;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;font-family:inherit;transition:opacity 0.15s;opacity:0.4;pointer-events:none;";
-    btnFinish.innerHTML = "✓ Готово <span id=\"point-counter\" style=\"opacity:0.7;font-size:11px;margin-left:4px\">0/" + getMaxPoints() + "</span>";
-    btnFinish.onmouseenter = function() {
-        if (pointCount >= getMinFinishPoints()) this.style.opacity = "0.9";
-    };
-    btnFinish.onmouseleave = function() {
-        this.style.opacity = pointCount >= getMinFinishPoints() ? "1" : "0.4";
-    };
-    btnFinish.onclick = function() {
-        if (currentHandler && pointCount >= getMinFinishPoints() && typeof currentHandler.completeShape === "function") {
+    btnFinish.innerHTML = "✓ Готово <span id='point-counter' style='opacity:0.7;font-size:11px;margin-left:4px'>0/" + getMaxPoints() + "</span>";
+    btnFinish.onmouseenter = function() { if (pointCount >= getMinFinishPoints()) this.style.opacity = "0.9"; };
+    btnFinish.onmouseleave = function() { this.style.opacity = pointCount >= getMinFinishPoints() ? "1" : "0.4"; };
+    btnFinish.onclick = function(e) {
+        e.stopPropagation();
+        if (!currentHandler || pointCount < getMinFinishPoints()) return;
+        if (currentMode === "rectangle") {
+            if (typeof currentHandler._fireCreatedEvent === "function") currentHandler._fireCreatedEvent();
+            currentHandler.disable();
+        } else if (typeof currentHandler.completeShape === "function") {
             currentHandler.completeShape();
         }
     };
@@ -587,39 +570,22 @@ function createToolbar() {
     drawToolbar.appendChild(btnUndo);
     drawToolbar.appendChild(btnFinish);
 
-    var mapSection = document.getElementById("map-section");
-    if (mapSection) {
-        mapSection.appendChild(drawToolbar);
-    } else {
-        document.body.appendChild(drawToolbar);
-    }
+    const mapSection = document.getElementById("map-section");
+    (mapSection || document.body).appendChild(drawToolbar);
 
     drawToolbar.style.display = "flex";
     if (typeof lucide !== "undefined") lucide.createIcons();
-
     return drawToolbar;
 }
 
 function hideToolbar() {
-    if (drawToolbar) {
-        drawToolbar.style.display = "none";
-    }
+    if (drawToolbar) drawToolbar.style.display = "none";
 }
 
 function clearAnalysisUI() {
-    if (state.heatLayer) {
-        map.removeLayer(state.heatLayer);
-        state.heatLayer = null;
-    }
-    if (state.markersLayer) {
-        map.removeLayer(state.markersLayer);
-        state.markersLayer = null;
-    }
-    if (state.scrapedMarkersLayer) {
-        map.removeLayer(state.scrapedMarkersLayer);
-        state.scrapedMarkersLayer = null;
-    }
-
+    if (state.heatLayer) { map.removeLayer(state.heatLayer); state.heatLayer = null; }
+    if (state.markersLayer) { map.removeLayer(state.markersLayer); state.markersLayer = null; }
+    if (state.scrapedMarkersLayer) { map.removeLayer(state.scrapedMarkersLayer); state.scrapedMarkersLayer = null; }
     state.organizations = [];
     state.scores = {};
     state.categories = {};
@@ -629,74 +595,48 @@ function clearAnalysisUI() {
     state.scrapeEnriched = false;
     state.reportCache = null;
     state.activeFilter = null;
-
     document.getElementById("actions-panel").style.display = "none";
     document.getElementById("report-btn").style.display = "none";
     document.getElementById("quick-questions").style.display = "none";
+    const sp = document.getElementById("scores-panel");
+    if (sp) { sp.style.display = "none"; sp.innerHTML = ""; }
 }
 
-function setCurrentLayer(layer) {
-    drawnItems.clearLayers();
-    drawnItems.addLayer(layer);
-    state.drawnLayer = layer;
-    var b = layer.getBounds();
-    state.bbox = b.getSouth() + "," + b.getWest() + "," + b.getNorth() + "," + b.getEast();
-    document.getElementById("actions-panel").style.display = "flex";
-    state.reportCache = null;
-}
-
-function addDrawingHint(mode) {
-    if (window._qpDrawingHintShown) return;
-    window._qpDrawingHintShown = true;
-
-    if (mode === "rectangle") {
-        addBotMessage("ℹ Для прямоугольника: 1-й клик — первая точка, 2-й клик — вторая точка. Удерживать мышь не нужно.");
-    } else {
-        addBotMessage("ℹ Рисование области: используйте ЛЕВУЮ кнопку мыши. Можно удалить последнюю точку, отменить рисование или завершить полигон кнопкой «Готово».");
-    }
-}
-
+// ПАТЧ: прямоугольник по двум кликам (без удержания мыши)
 function patchRectangleTool() {
     if (!L.Draw || !L.Draw.Rectangle || L.Draw.Rectangle.prototype._qpPatched) return;
-
-    var RP = L.Draw.Rectangle.prototype;
+    const RP = L.Draw.Rectangle.prototype;
     RP._qpPatched = true;
 
+    const origAdd = RP.addHooks;
+    const origRemove = RP.removeHooks;
+
     RP.addHooks = function() {
-        L.Draw.Feature.prototype.addHooks.call(this);
-
+        origAdd.call(this);
         if (!this._map) return;
-
         this._qpStartLatLng = null;
         this._qpClickHandler = this._qpClickHandler || this._onQPClick.bind(this);
         this._qpMoveHandler = this._qpMoveHandler || this._onQPMove.bind(this);
-
         if (this._map.dragging) this._map.dragging.disable();
         if (this._map.doubleClickZoom) this._map.doubleClickZoom.disable();
-
         this._map.on("click", this._qpClickHandler, this);
         this._map.on("mousemove", this._qpMoveHandler, this);
         this._map.getContainer().style.cursor = "crosshair";
     };
 
     RP.removeHooks = function() {
-        L.Draw.Feature.prototype.removeHooks.call(this);
-
+        origRemove.call(this);
         if (!this._map) return;
-
         this._map.off("click", this._qpClickHandler, this);
         this._map.off("mousemove", this._qpMoveHandler, this);
-
         if (this._map.dragging) this._map.dragging.enable();
         if (this._map.doubleClickZoom) this._map.doubleClickZoom.enable();
-
         this._map.getContainer().style.cursor = "";
         this._qpStartLatLng = null;
     };
 
     RP._onQPClick = function(e) {
         if (e.originalEvent && e.originalEvent.button !== 0) return;
-
         if (!this._qpStartLatLng) {
             this._qpStartLatLng = e.latlng;
             currentMode = "rectangle";
@@ -704,50 +644,39 @@ function patchRectangleTool() {
             pointCount = 1;
             createToolbar();
             updateUI();
-
-            if (typeof this._drawShape === "function") {
-                this._drawShape(e.latlng);
-            }
+            if (typeof this._drawShape === "function") this._drawShape(e.latlng);
             return;
         }
-
         pointCount = 2;
         updateUI();
-
-        if (typeof this._drawShape === "function") {
-            this._drawShape(e.latlng);
-        }
-        if (typeof this._fireCreatedEvent === "function") {
-            this._fireCreatedEvent();
-        }
+        if (typeof this._drawShape === "function") this._drawShape(e.latlng);
+        if (typeof this._fireCreatedEvent === "function") this._fireCreatedEvent();
         this.disable();
     };
 
     RP._onQPMove = function(e) {
         if (!this._qpStartLatLng) return;
-        if (typeof this._drawShape === "function") {
-            this._drawShape(e.latlng);
-        }
+        if (typeof this._drawShape === "function") this._drawShape(e.latlng);
     };
 }
-
 patchRectangleTool();
 
 map.on(L.Draw.Event.DRAWSTART, function(e) {
     if (e.layerType !== "polygon" && e.layerType !== "rectangle") return;
-
     currentHandler = e.handler;
     currentMode = e.layerType;
     pointCount = 0;
-
     createToolbar();
     updateUI();
-    addDrawingHint(currentMode);
+    setTimeout(function() {
+        document.querySelectorAll(".leaflet-draw-actions, .leaflet-draw-edit").forEach(function(el) {
+            el.style.display = "none";
+        });
+    }, 50);
 });
 
 map.on(L.Draw.Event.DRAWVERTEX, function(e) {
     if (!currentHandler || currentMode !== "polygon") return;
-
     if (e.layers && typeof e.layers.getLayers === "function") {
         pointCount = e.layers.getLayers().length;
     } else if (currentHandler._markers) {
@@ -755,9 +684,7 @@ map.on(L.Draw.Event.DRAWVERTEX, function(e) {
     } else {
         pointCount = Math.max(0, pointCount + 1);
     }
-
     updateUI();
-
     if (pointCount >= MAX_POINTS && typeof currentHandler.completeShape === "function") {
         setTimeout(function() {
             if (currentHandler && typeof currentHandler.completeShape === "function") {
@@ -772,8 +699,6 @@ map.on(L.Draw.Event.DRAWSTOP, function() {
     currentHandler = null;
     currentMode = "";
     pointCount = 0;
-    window._qpDrawingHintShown = false;
-
     setTimeout(function() {
         document.querySelectorAll(".leaflet-draw-actions").forEach(function(el) {
             el.style.display = "none";
@@ -781,29 +706,22 @@ map.on(L.Draw.Event.DRAWSTOP, function() {
     }, 10);
 });
 
-// Удаление области — реально чистим всё, чтобы она не появлялась снова
 map.on("draw:deleted", function() {
     drawnItems.clearLayers();
     state.drawnLayer = null;
     state.bbox = null;
-
     clearAnalysisUI();
     hideToolbar();
-
     addBotMessage("🗑 Область удалена. Теперь можно выбрать новую.");
 });
 
-// Редактирование области — обновляем текущую геометрию
 map.on("draw:edited", function(e) {
-    var layers = e.layers && e.layers.getLayers ? e.layers.getLayers() : [];
+    const layers = e.layers && e.layers.getLayers ? e.layers.getLayers() : [];
     if (!layers.length) return;
-
-    var layer = layers[0];
+    const layer = layers[0];
     state.drawnLayer = layer;
-
-    var b = layer.getBounds();
+    const b = layer.getBounds();
     state.bbox = b.getSouth() + "," + b.getWest() + "," + b.getNorth() + "," + b.getEast();
-
     document.getElementById("actions-panel").style.display = "flex";
     state.reportCache = null;
 });
@@ -815,6 +733,88 @@ setInterval(function() {
 }, 200);
 
 console.log("✅ Полигон/прямоугольник: тулбар, лимит точек и click-click прямоугольник готовы");
+
+// ========== CITY ==========
+let detectedCity = "", detectedLat = 55.7558, detectedLon = 37.6173;
+let cityInitTimeout = null;
+
+function initCity() {
+    const saved = localStorage.getItem("qp_city");
+    if (saved) {
+        const d = JSON.parse(saved);
+        map.setView([d.lat, d.lon], 13);
+        document.getElementById("city-modal").style.display = "none";
+        addBotMessage("Привет! Я AI-урбанист\n\nГород: " + d.name + "\n\nВыберите интересующую вас область с помощью:\n⬡ многоугольника или ▢ прямоугольника с левой стороны карты\n→ далее нажмите «Анализ»\n\nВы можете изменить точки области или удалить неудачную через меню редактирования.");        return;
+    }
+    document.getElementById("city-modal").style.display = "flex";
+    cityInitTimeout = setTimeout(() => { if (!detectedCity) showCityInput(); }, 12000);
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+            async pos => {
+                try {
+                    const r = await fetch("https://nominatim.openstreetmap.org/reverse?lat=" + pos.coords.latitude + "&lon=" + pos.coords.longitude + "&format=json&accept-language=ru");
+                    const d = await r.json();
+                    const c = d.address?.city || d.address?.town || d.address?.village || "Ваш город";
+                    clearTimeout(cityInitTimeout);
+                    showCityConfirm(c, pos.coords.latitude, pos.coords.longitude);
+                } catch (e) { clearTimeout(cityInitTimeout); detectByIP(); }
+            },
+            () => { clearTimeout(cityInitTimeout); detectByIP(); },
+            { timeout: 8000 }
+        );
+    } else detectByIP();
+}
+async function detectByIP() {
+    try {
+        const r = await fetch("https://ipapi.co/json/");
+        if (r.ok) {
+            const d = await r.json();
+            if (d.city && d.latitude) { clearTimeout(cityInitTimeout); showCityConfirm(d.city, d.latitude, d.longitude); return; }
+        }
+    } catch (e) {}
+    clearTimeout(cityInitTimeout);
+    showCityInput();
+}
+function showCityConfirm(c, lat, lon) {
+    detectedCity = c; detectedLat = lat; detectedLon = lon;
+    document.getElementById("city-detecting").style.display = "none";
+    document.getElementById("city-name-show").textContent = c;
+    document.getElementById("city-confirm").style.display = "block";
+}
+function showCityInput() {
+    clearTimeout(cityInitTimeout);
+    document.getElementById("city-detecting").style.display = "none";
+    document.getElementById("city-confirm").style.display = "none";
+    document.getElementById("city-input-block").style.display = "block";
+}
+function confirmCity() {
+    clearTimeout(cityInitTimeout);
+    localStorage.setItem("qp_city", JSON.stringify({ name: detectedCity, lat: detectedLat, lon: detectedLon }));
+    map.setView([detectedLat, detectedLon], 13);
+    document.getElementById("city-modal").style.display = "none";
+    addBotMessage("Привет! Я AI-урбанист\n\nГород: " + detectedCity + "\n\nВыберите интересующую вас область с помощью:\n⬡ многоугольника или ▢ прямоугольника с левой стороны карты\n→ далее нажмите «Анализ»\n\nВы можете изменить точки области или удалить неудачную через меню редактирования.");}
+function skipCity() {
+    clearTimeout(cityInitTimeout);
+    localStorage.setItem("qp_city", JSON.stringify({ name: "Москва", lat: 55.7558, lon: 37.6173 }));
+    map.setView([55.7558, 37.6173], 13);
+    document.getElementById("city-modal").style.display = "none";
+    addBotMessage("Привет!\n\nВыберите интересующую вам область с помощью:\n⬡ многоугольника или ▢ прямоугольника с левой стороны карты\n→ далее нажмите «Анализ»\n\nВы можете изменить точки области или удалить неудачную через меню редактирования.");}
+async function searchAndGoCity() {
+    const q = document.getElementById("city-input").value.trim();
+    if (!q) return;
+    try {
+        const r = await fetch("/api/search?q=" + encodeURIComponent(q));
+        const d = await r.json();
+        if (d.results?.length > 0) {
+            detectedLat = d.results[0].lat;
+            detectedLon = d.results[0].lon;
+            detectedCity = d.results[0].display_name.split(",")[0];
+        }
+    } catch (e) {}
+    confirmCity();
+}
+initCity();
+
 // ========== SEARCH ==========
 let searchTimeout;
 document.getElementById("search-input").addEventListener("input", e => {
@@ -842,39 +842,6 @@ document.getElementById("search-input").addEventListener("input", e => {
         } catch (e) {}
     }, 400);
 });
-
-
-function pollProAnalyze(runId) {
-    let attempts = 0;
-    const max = 36;
-    if (scrapingPollInterval) clearInterval(scrapingPollInterval);
-
-    // Если это кешированный результат - сразу запрашиваем
-    const interval = runId.startsWith("cached_") ? 100 : 10000;
-
-    scrapingPollInterval = setInterval(async () => {
-        attempts++;
-        if (attempts > max) {
-            clearInterval(scrapingPollInterval);
-            addBotMessage("⏱ Таймаут");
-            return;
-        }
-        try {
-            const r = await fetch("/api/scrape/status/" + runId);
-            const d = await r.json();
-            if (d.status === "SUCCEEDED") {
-                clearInterval(scrapingPollInterval);
-                processApifyResults(d.data || [], d.from_cache);
-            } else if (["FAILED", "ABORTED", "TIMED-OUT"].includes(d.status)) {
-                clearInterval(scrapingPollInterval);
-                addBotMessage("✗ Парсинг не удался");
-            } else {
-                if (attempts === 3) addBotMessage("⏳ Парсим Яндекс...");
-                if (attempts === 12) addBotMessage("⏳ Ещё парсим...");
-            }
-        } catch (e) {}
-    }, interval);
-}
 
 function processApifyResults(items, fromCache) {
     const filtered = items.filter(o => o.lat && o.lon && isInsideDrawn(o.lat, o.lon));
@@ -922,7 +889,8 @@ function processApifyResults(items, fromCache) {
     addBotMessage(msg);
 
     document.getElementById("report-btn").style.display = "inline-flex";
-    document.getElementById("scrape-btn").style.display = "inline-flex";
+    const scrapeBtn = document.getElementById("scrape-btn");
+    if (scrapeBtn) scrapeBtn.style.display = "inline-flex";
     document.getElementById("quick-questions").style.display = "flex";
 }
 
@@ -1012,8 +980,6 @@ function calculateApifyScores(items) {
     };
 }
 
-
-
 // ========== FILTERS ==========
 const CAT_MAP = {
     "Еда": ["cafe", "restaurant", "fast_food", "bar", "pub", "ice_cream"],
@@ -1042,7 +1008,7 @@ function renderFilteredMarkers() {
     if (state.markersLayer) map.removeLayer(state.markersLayer);
     state.markersLayer = L.layerGroup();
     state.organizations.forEach(o => {
-        if (!isInsideDrawn(o.lat, o.lon)) return; // ФИЛЬТР по области
+        if (!isInsideDrawn(o.lat, o.lon)) return;
         if (state.activeFilter && state.activeFilter !== "Разнообразие") {
             if (!(CAT_MAP[state.activeFilter] || []).includes(o.amenity)) return;
         }
@@ -1053,16 +1019,14 @@ function renderFilteredMarkers() {
     state.markersLayer.addTo(map);
 }
 
-// Проверка: точка внутри нарисованной области?
 function isInsideDrawn(lat, lon) {
     if (!state.drawnLayer) return true;
     const pt = L.latLng(lat, lon);
-    // Для прямоугольника
-    if (state.drawnLayer.getBounds && !state.drawnLayer.getLatLngs) {
+    if (state.drawnLayer instanceof L.Rectangle) {
         return state.drawnLayer.getBounds().contains(pt);
     }
-    // Для полигона — ray casting
-    const latlngs = state.drawnLayer.getLatLngs()[0] || state.drawnLayer.getLatLngs();
+    const raw = state.drawnLayer.getLatLngs();
+    const latlngs = Array.isArray(raw[0]) ? raw[0] : raw;
     if (!latlngs || latlngs.length < 3) {
         return state.drawnLayer.getBounds().contains(pt);
     }
@@ -1077,8 +1041,6 @@ function isInsideDrawn(lat, lon) {
     return inside;
 }
 
-
-
 // ========== SCORES ==========
 function showScores(s) {
     const panel = document.getElementById("scores-panel");
@@ -1089,7 +1051,6 @@ function showScores(s) {
     html += '<div class="score-sub">' + s.total_places + ' мест · ' + s.area_km2 + ' км²</div>';
     html += '</div>';
 
-    // Карточка плотности
     html += '<div class="score-card density-card">';
     html += '<div class="score-label">Плотность POI</div>';
     html += '<div style="display:flex;justify-content:space-between;align-items:flex-end;margin-top:4px">';
@@ -1147,7 +1108,7 @@ async function generateReport() {
 
     try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 95000); // 95 сек таймаут
+        const timeoutId = setTimeout(() => controller.abort(), 95000);
 
         const r = await fetch("/api/report", {
             method: "POST",
@@ -1252,14 +1213,12 @@ function openAnalyzeModal(mode) {
     const container = document.getElementById("analyze-modal-content");
     container.innerHTML = "";
 
-    // Кнопка закрытия
     const closeBtn = document.createElement("button");
     closeBtn.className = "modal-close";
     closeBtn.textContent = "×";
     closeBtn.onclick = closeAnalyzeModal;
     container.appendChild(closeBtn);
 
-    // Заголовок
     const h2 = document.createElement("h2");
     h2.textContent = isPro ? "💎 Премиум-анализ" : "⚡ Быстрый анализ";
     container.appendChild(h2);
@@ -1268,7 +1227,6 @@ function openAnalyzeModal(mode) {
     p.textContent = isPro ? "Свежие данные с Яндекс.Карт" : "Данные из OpenStreetMap (бесплатно)";
     container.appendChild(p);
 
-    // Глубина (только для PRO)
     if (isPro) {
         const depthSection = document.createElement("div");
         depthSection.className = "opt-section";
@@ -1295,7 +1253,6 @@ function openAnalyzeModal(mode) {
         container.appendChild(depthSection);
     }
 
-    // Категории
     const catSection = document.createElement("div");
     catSection.className = "opt-section";
     catSection.innerHTML = '<h3>Категории</h3>';
@@ -1318,7 +1275,6 @@ function openAnalyzeModal(mode) {
     catSection.appendChild(grid);
     container.appendChild(catSection);
 
-    // Кнопка запуска
     const runBtn = document.createElement("button");
     runBtn.className = "btn-primary";
     runBtn.textContent = "Запустить анализ";
@@ -1461,7 +1417,6 @@ async function runProAnalysis(categories, enrichData) {
     }
 }
 
-// pollProAnalyze оставляем как было
 function pollProAnalyze(runId) {
     let attempts = 0;
     const max = state.scrapeEnriched ? 80 : 36;
@@ -1611,5 +1566,4 @@ function markdownToHtml(t) {
             .replace(/\n/g, "<br>");
 }
 
-// Re-render lucide icons after dynamic changes
 setTimeout(() => lucide.createIcons(), 100);
