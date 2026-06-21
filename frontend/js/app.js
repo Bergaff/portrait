@@ -515,7 +515,6 @@ function updateUI() {
     if (btnUndo) {
         btnUndo.style.display = currentMode === "rectangle" ? "none" : "flex";
     }
-}
 
 function createToolbar() {
     if (drawToolbar) {
