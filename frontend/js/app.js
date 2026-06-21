@@ -823,20 +823,38 @@ window.confirmCity = window.confirmCity || function() {
 Вы можете изменить точки области или удалить неудачную через меню редактирования.`);
 };
 
-window.skipCity = window.skipCity || function() {
-  clearTimeout(cityInitTimeout);
-  localStorage.setItem("qp_city", JSON.stringify({ name: "Москва", lat: 55.7558, lon: 37.6173 }));
-  map.setView([55.7558, 37.6173], 13);
-  document.getElementById("city-modal").style.display = "none";
-  addBotMessage(`Привет! Я AI-урбанист
+window.skipCity = function() {
+    if (typeof cityInitTimeout !== 'undefined') {
+        clearTimeout(cityInitTimeout);
+    }
+    localStorage.setItem("qp_city", JSON.stringify({ name: "Москва", lat: 55.7558, lon: 37.6173 }));
+    if (typeof map !== 'undefined') {
+        map.setView([55.7558, 37.6173], 13);
+    }
+    var modal = document.getElementById("city-modal");
+    if (modal) {
+        modal.style.display = "none";
+    }
+    
+    // Безопасная строка без использования обратных кавычек, которая не ломает Python-скрипт
+    var msg = "Привет! Я AI-урбанист
 
-Город: Москва
+" +
+              "Город: Москва
 
-Выберите интересующую вас область с помощью:
-⬡ многоугольника или ▢ прямоугольника с левой стороны карты
-→ далее нажмите «Анализ»
+" +
+              "Выберите интересующую вас область с помощью:
+" +
+              "⬡ многоугольника или ▢ прямоугольника с левой стороны карты
+" +
+              "→ далее нажмите «Анализ»
 
-Вы можете изменить точки области или удалить неудачную через меню редактирования.`);
+" +
+              "Вы можете изменить точки области или удалить неудачную через меню редактирования.";
+              
+    if (typeof addBotMessage === 'function') {
+        addBotMessage(msg);
+    }
 };
 
 window.showCityInput = window.showCityInput || function() {
