@@ -1,4 +1,69 @@
+// app.js - ИСПРАВЛЕННАЯ ВЕРСИЯ
+
 const APP_VERSION = "1.0";
+
+// ========== CITY ==========
+let detectedCity = "", detectedLat = 55.7558, detectedLon = 37.6173;
+let cityInitTimeout = null;
+
+// Определяем функции ДО использования в HTML
+window.confirmCity = function() {
+    clearTimeout(cityInitTimeout);
+    localStorage.setItem("qp_city", JSON.stringify({ name: detectedCity, lat: detectedLat, lon: detectedLon }));
+    map.setView([detectedLat, detectedLon], 13);
+    const modal = document.getElementById("city-modal");
+    if (modal) modal.style.display = "none";
+    const msg = "Привет! Я AI-урбанист
+
+Город: " + detectedCity + "
+
+Выберите интересующую вас область с помощью:
+⬡ многоугольника или ▢ прямоугольника с левой стороны карты
+→ далее нажмите Анализ
+
+Вы можете изменить точки области или удалить неудачную через меню редактирования.";
+    addBotMessage(msg);
+};
+
+window.skipCity = function() {
+    clearTimeout(cityInitTimeout);
+    localStorage.setItem("qp_city", JSON.stringify({ name: "Москва", lat: 55.7558, lon: 37.6173 }));
+    map.setView([55.7558, 37.6173], 13);
+    const modal = document.getElementById("city-modal");
+    if (modal) modal.style.display = "none";
+    const msg = "Привет! Я AI-урбанист
+
+Город: Москва
+
+Выберите интересующую вас область с помощью:
+⬡ многоугольника или ▢ прямоугольника с левой стороны карты
+→ далее нажмите Анализ
+
+Вы можете изменить точки области или удалить неудачную через меню редактирования.";
+    addBotMessage(msg);
+};
+
+window.showCityInput = function() {
+    clearTimeout(cityInitTimeout);
+    document.getElementById("city-detecting").style.display = "none";
+    document.getElementById("city-confirm").style.display = "none";
+    document.getElementById("city-input-block").style.display = "block";
+};
+
+window.searchAndGoCity = async function() {
+    const q = document.getElementById("city-input").value.trim();
+    if (!q) return;
+    try {
+        const r = await fetch("/api/search?q=" + encodeURIComponent(q));
+        const d = await r.json();
+        if (d.results?.length > 0) {
+            detectedLat = d.results[0].lat;
+            detectedLon = d.results[0].lon;
+            detectedCity = d.results[0].display_name.split(",")[0];
+        }
+    } catch (e) {}
+    window.confirmCity();
+};
 
 // ========== ТЕМА ==========
 function toggleTheme() {
@@ -177,10 +242,8 @@ function openProfile() {
     if (!currentUser) { toggleAuth(); return; }
     const d = new Date(currentUser.created_at).toLocaleDateString("ru-RU");
     const p = currentUser.app_metadata?.provider || "email";
-
     const container = document.getElementById("profile-content");
     container.innerHTML = "";
-
     const info = document.createElement("div");
     info.innerHTML =
         '<div class="profile-row"><span class="profile-label">Email</span><span>' + (currentUser.email || "—") + '</span></div>' +
@@ -188,13 +251,10 @@ function openProfile() {
         '<div class="profile-row"><span class="profile-label">Регистрация</span><span>' + d + '</span></div>' +
         '<div class="profile-row"><span class="profile-label">Запросов</span><span>' + userStats.requests + '</span></div>';
     container.appendChild(info);
-
     const history = JSON.parse(localStorage.getItem(getHistoryKey()) || "[]");
-
     const histHeader = document.createElement("div");
     histHeader.style.cssText = "margin-top:16px;display:flex;justify-content:space-between;align-items:center;margin-bottom:8px";
     histHeader.innerHTML = '<span class="profile-label" style="font-weight:600">История анализов (' + history.length + ')</span>';
-
     if (history.length > 0) {
         const clearBtn = document.createElement("button");
         clearBtn.className = "btn-ghost";
@@ -204,7 +264,6 @@ function openProfile() {
         histHeader.appendChild(clearBtn);
     }
     container.appendChild(histHeader);
-
     if (history.length === 0) {
         const empty = document.createElement("div");
         empty.className = "history-empty";
@@ -213,16 +272,13 @@ function openProfile() {
     } else {
         const list = document.createElement("div");
         list.className = "history-list";
-
         history.forEach((item, idx) => {
             const dt = new Date(item.date);
             const dtStr = dt.toLocaleDateString("ru-RU") + " " + dt.toLocaleTimeString("ru-RU", {hour:'2-digit', minute:'2-digit'});
             const modeIcon = item.mode === "free" ? "⚡" : item.mode === "pro+ai" ? "🤖" : "💎";
             const shapeIcon = (item.shape && item.shape.type === "polygon") ? "⬡" : "▢";
-
             const histItem = document.createElement("div");
             histItem.className = "history-item";
-
             const itemContent = document.createElement("div");
             itemContent.className = "history-item-content";
             itemContent.style.cssText = "flex:1;cursor:pointer;min-width:0";
@@ -230,21 +286,17 @@ function openProfile() {
                 '<div class="history-item-title">' + modeIcon + ' ' + shapeIcon + ' Индекс: ' + (item.score || "?") + '/100, мест: ' + (item.places || 0) + '</div>' +
                 '<div class="history-item-meta"><span>' + dtStr + '</span><span>' + (item.mode || "free") + '</span></div>';
             itemContent.onclick = function() { loadFromHistory(idx); };
-
             const delBtn = document.createElement("button");
             delBtn.className = "history-item-del";
             delBtn.title = "Удалить запись";
             delBtn.innerHTML = "×";
             delBtn.onclick = function(e) { deleteHistoryItem(idx, e); };
-
             histItem.appendChild(itemContent);
             histItem.appendChild(delBtn);
             list.appendChild(histItem);
         });
-
         container.appendChild(list);
     }
-
     document.getElementById("profile-modal").style.display = "flex";
 }
 function closeProfile() { document.getElementById("profile-modal").style.display = "none"; }
@@ -261,9 +313,7 @@ function saveToHistory(mode, placesCount, score) {
     try {
         history = JSON.parse(localStorage.getItem(key) || "[]");
     } catch (e) {}
-
     const center = state.drawnLayer ? state.drawnLayer.getBounds().getCenter() : null;
-
     let shapeData = null;
     if (state.drawnLayer) {
         try {
@@ -278,7 +328,6 @@ function saveToHistory(mode, placesCount, score) {
             console.warn("Cant save shape", e);
         }
     }
-
     history.unshift({
         bbox: state.bbox,
         center: center ? [center.lat, center.lng] : null,
@@ -293,7 +342,6 @@ function saveToHistory(mode, placesCount, score) {
         categories: state.categories,
         date: new Date().toISOString()
     });
-
     history = history.slice(0, 20);
     localStorage.setItem(key, JSON.stringify(history));
 }
@@ -303,7 +351,6 @@ function loadFromHistory(idx) {
     const history = JSON.parse(localStorage.getItem(key) || "[]");
     if (!history[idx]) return;
     const h = history[idx];
-
     state.bbox = h.bbox;
     state.scores = h.scores || {};
     state.organizations = h.organizations || [];
@@ -311,14 +358,11 @@ function loadFromHistory(idx) {
     state.orgText = h.orgText || "";
     state.categories = h.categories || {};
     state.reportCache = null;
-
     drawnItems.clearLayers();
     let shape = null;
-
     if (h.shape && h.shape.points && h.shape.points.length >= 2) {
         const latlngs = h.shape.points.map(p => [p.lat, p.lng]);
         const style = { color: "#7c5cff", fillOpacity: 0.15, weight: 2 };
-
         if (h.shape.type === "polygon") {
             shape = L.polygon(latlngs, style);
         } else {
@@ -331,17 +375,14 @@ function loadFromHistory(idx) {
             color: "#7c5cff", fillOpacity: 0.15, weight: 2
         });
     }
-
     if (shape) {
         drawnItems.addLayer(shape);
         state.drawnLayer = shape;
         map.fitBounds(shape.getBounds());
     }
-
     if (state.heatLayer) { map.removeLayer(state.heatLayer); }
     if (state.markersLayer) { map.removeLayer(state.markersLayer); }
     if (state.scrapedMarkersLayer) { map.removeLayer(state.scrapedMarkersLayer); }
-
     if (state.organizations.length > 0) {
         state.heatLayer = L.heatLayer(
             state.organizations.filter(o => o.lat && o.lon).map(o => [o.lat, o.lon, 1]),
@@ -350,12 +391,10 @@ function loadFromHistory(idx) {
     }
     if (h.mode && h.mode.startsWith("pro")) renderApifyMarkers();
     else renderFilteredMarkers();
-
     showScores(state.scores);
     document.getElementById("actions-panel").style.display = "flex";
     document.getElementById("report-btn").style.display = "inline-flex";
     document.getElementById("quick-questions").style.display = "flex";
-
     closeProfile();
     addBotMessage("📂 Загружено из истории: " + new Date(h.date).toLocaleString("ru-RU"));
 }
@@ -488,32 +527,28 @@ function getMinFinishPoints() {
 }
 
 function updateUI() {
-  if (!drawToolbar) return;
-  const counter = document.getElementById("point-counter");
-  if (counter) counter.textContent = pointCount + "/" + getMaxPoints();
-
-  const btnFinish = document.getElementById("btn-finish-polygon");
-  const btnCancel = document.getElementById("btn-cancel-polygon");
-  const btnUndo = document.getElementById("btn-undo-polygon");
-
-  if (btnFinish) {
-    if (pointCount >= getMinFinishPoints()) {
-      btnFinish.style.opacity = "1";
-      btnFinish.style.pointerEvents = "auto";
-    } else {
-      btnFinish.style.opacity = "0.4";
-      btnFinish.style.pointerEvents = "none";
+    if (!drawToolbar) return;
+    const counter = document.getElementById("point-counter");
+    if (counter) counter.textContent = pointCount + "/" + getMaxPoints();
+    const btnFinish = document.getElementById("btn-finish-polygon");
+    const btnCancel = document.getElementById("btn-cancel-polygon");
+    const btnUndo = document.getElementById("btn-undo-polygon");
+    if (btnFinish) {
+        if (pointCount >= getMinFinishPoints()) {
+            btnFinish.style.opacity = "1";
+            btnFinish.style.pointerEvents = "auto";
+        } else {
+            btnFinish.style.opacity = "0.4";
+            btnFinish.style.pointerEvents = "none";
+        }
     }
-  }
-
-  if (btnCancel) {
-    btnCancel.style.opacity = "1";
-    btnCancel.style.pointerEvents = "auto";
-  }
-
-  if (btnUndo) {
-      btnUndo.style.display = currentMode === "rectangle" ? "none" : "flex";
-  }
+    if (btnCancel) {
+        btnCancel.style.opacity = "1";
+        btnCancel.style.pointerEvents = "auto";
+    }
+    if (btnUndo) {
+        btnUndo.style.display = currentMode === "rectangle" ? "none" : "flex";
+    }
 }
 
 function createToolbar() {
@@ -523,13 +558,10 @@ function createToolbar() {
         updateUI();
         return drawToolbar;
     }
-
     drawToolbar = document.createElement("div");
     drawToolbar.id = "custom-draw-toolbar";
     drawToolbar.style.cssText = "position:absolute;bottom:32px;left:50%;transform:translateX(-50%);z-index:99999;display:flex;gap:8px;padding:10px 14px;background:var(--card,#222);border:1px solid var(--border,#444);border-radius:12px;box-shadow:0 10px 40px rgba(0,0,0,0.4);pointer-events:auto;";
-
     const baseBtn = "padding:8px 16px;border-radius:8px;border:1px solid var(--border,#444);background:var(--secondary,#333);color:var(--foreground,#fff);font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;font-family:inherit;transition:all 0.15s;";
-
     const btnCancel = document.createElement("button");
     btnCancel.style.cssText = baseBtn;
     btnCancel.innerHTML = "✕ Отмена";
@@ -539,7 +571,6 @@ function createToolbar() {
         e.stopPropagation();
         if (currentHandler && currentHandler.disable) currentHandler.disable();
     };
-
     const btnUndo = document.createElement("button");
     btnUndo.id = "btn-undo-polygon";
     btnUndo.style.cssText = baseBtn;
@@ -554,7 +585,6 @@ function createToolbar() {
             updateUI();
         }
     };
-
     const btnFinish = document.createElement("button");
     btnFinish.id = "btn-finish-polygon";
     btnFinish.style.cssText = "padding:8px 16px;border-radius:8px;border:none;background:var(--primary);color:white;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;font-family:inherit;transition:opacity 0.15s;opacity:0.4;pointer-events:none;";
@@ -571,14 +601,11 @@ function createToolbar() {
             currentHandler.completeShape();
         }
     };
-
     drawToolbar.appendChild(btnCancel);
     drawToolbar.appendChild(btnUndo);
     drawToolbar.appendChild(btnFinish);
-
     const mapSection = document.getElementById("map-section");
     (mapSection || document.body).appendChild(drawToolbar);
-
     drawToolbar.style.display = "flex";
     if (typeof lucide !== "undefined") lucide.createIcons();
     return drawToolbar;
@@ -613,10 +640,8 @@ function patchRectangleTool() {
     if (!L.Draw || !L.Draw.Rectangle || L.Draw.Rectangle.prototype._qpPatched) return;
     const RP = L.Draw.Rectangle.prototype;
     RP._qpPatched = true;
-
     const origAdd = RP.addHooks;
     const origRemove = RP.removeHooks;
-
     RP.addHooks = function() {
         origAdd.call(this);
         if (!this._map) return;
@@ -629,7 +654,6 @@ function patchRectangleTool() {
         this._map.on("mousemove", this._qpMoveHandler, this);
         this._map.getContainer().style.cursor = "crosshair";
     };
-
     RP.removeHooks = function() {
         origRemove.call(this);
         if (!this._map) return;
@@ -640,7 +664,6 @@ function patchRectangleTool() {
         this._map.getContainer().style.cursor = "";
         this._qpStartLatLng = null;
     };
-
     RP._onQPClick = function(e) {
         if (e.originalEvent && e.originalEvent.button !== 0) return;
         if (!this._qpStartLatLng) {
@@ -657,7 +680,6 @@ function patchRectangleTool() {
         updateUI();
         if (typeof this._drawShape === "function") this._drawShape(e.latlng);
     };
-
     RP._onQPMove = function(e) {
         if (!this._qpStartLatLng) return;
         if (typeof this._drawShape === "function") this._drawShape(e.latlng);
@@ -711,18 +733,16 @@ map.on(L.Draw.Event.DRAWSTOP, function() {
 });
 
 map.on("draw:deleted", function(e) {
-  drawnItems.clearLayers();
-  state.bbox = null;
-  state.drawnLayer = null;
-
-  if (drawControl && drawControl._toolbars && drawControl._toolbars.edit && drawControl._toolbars.edit._modes && drawControl._toolbars.edit._modes.remove) {
-     try {
-       drawControl._toolbars.edit._modes.remove.handler.removeAllLayers();
-     } catch(err) { console.log(err); }
-  }
-
-  document.getElementById("actions-panel").style.display = "none";
-  addBotMessage("Область удалена. Теперь можно выбрать новую.");
+    drawnItems.clearLayers();
+    state.bbox = null;
+    state.drawnLayer = null;
+    if (drawControl && drawControl._toolbars && drawControl._toolbars.edit && drawControl._toolbars.edit._modes && drawControl._toolbars.edit._modes.remove) {
+        try {
+            drawControl._toolbars.edit._modes.remove.handler.removeAllLayers();
+        } catch(err) { console.log(err); }
+    }
+    document.getElementById("actions-panel").style.display = "none";
+    addBotMessage("Область удалена. Теперь можно выбрать новую.");
 });
 
 map.on("draw:edited", function(e) {
@@ -744,10 +764,7 @@ setInterval(function() {
 
 console.log("✅ Полигон/прямоугольник: тулбар, лимит точек и click-click прямоугольник готовы");
 
-// ========== CITY ==========
-let detectedCity = "", detectedLat = 55.7558, detectedLon = 37.6173;
-let cityInitTimeout = null;
-
+// ========== CITY INIT ==========
 function initCity() {
     const saved = localStorage.getItem("qp_city");
     if (saved) {
@@ -783,6 +800,7 @@ function initCity() {
         );
     } else detectByIP();
 }
+
 async function detectByIP() {
     try {
         const r = await fetch("https://ipapi.co/json/");
@@ -794,98 +812,13 @@ async function detectByIP() {
     clearTimeout(cityInitTimeout);
     showCityInput();
 }
+
 function showCityConfirm(c, lat, lon) {
     detectedCity = c; detectedLat = lat; detectedLon = lon;
     document.getElementById("city-detecting").style.display = "none";
     document.getElementById("city-name-show").textContent = c;
     document.getElementById("city-confirm").style.display = "block";
 }
-function showCityInput() {
-    clearTimeout(cityInitTimeout);
-    document.getElementById("city-detecting").style.display = "none";
-    document.getElementById("city-confirm").style.display = "none";
-    document.getElementById("city-input-block").style.display = "block";
-}
-window.confirmCity = function() {
-  clearTimeout(cityInitTimeout);
-  localStorage.setItem("qp_city", JSON.stringify({ name: detectedCity, lat: detectedLat, lon: detectedLon }));
-  map.setView([detectedLat, detectedLon], 13);
-  
-  const modal = document.getElementById("city-modal");
-  if (modal) {
-    modal.style.display = "none";
-  }
-  
-  const msg = 
-    "Привет! Я AI-урбанист
-
-" +
-    "Город: " + detectedCity + "
-
-" +
-    "Выберите интересующую вас область с помощью:
-" +
-    "⬡ многоугольника или ▢ прямоугольника с левой стороны карты
-" +
-    "→ далее нажмите Анализ
-
-" +
-    "Вы можете изменить точки области или удалить неудачную через меню редактирования.";
-  
-  addBotMessage(msg);
-};
-
-window.skipCity = function() {
-  clearTimeout(cityInitTimeout);
-  
-  localStorage.setItem("qp_city", JSON.stringify({ name: "Москва", lat: 55.7558, lon: 37.6173 }));
-  map.setView([55.7558, 37.6173], 13);
-  
-  const modal = document.getElementById("city-modal");
-  if (modal) {
-    modal.style.display = "none";
-  }
-  
-  const msg = 
-    "Привет! Я AI-урбанист
-
-" +
-    "Город: Москва
-
-" +
-    "Выберите интересующую вас область с помощью:
-" +
-    "⬡ многоугольника или ▢ прямоугольника с левой стороны карты
-" +
-    "→ далее нажмите Анализ
-
-" +
-    "Вы можете изменить точки области или удалить неудачную через меню редактирования.";
-  
-  addBotMessage(msg);
-};
-
-window.showCityInput = window.showCityInput || function() {
-  clearTimeout(cityInitTimeout);
-  document.getElementById("city-detecting").style.display = "none";
-  document.getElementById("city-confirm").style.display = "none";
-  document.getElementById("city-input-block").style.display = "block";
-};
-
-window.searchAndGoCity = window.searchAndGoCity || async function() {
-  const q = document.getElementById("city-input").value.trim();
-  if (!q) return;
-  try {
-    const r = await fetch("/api/search?q=" + encodeURIComponent(q));
-    const d = await r.json();
-    if (d.results?.length > 0) {
-      detectedLat = d.results[0].lat;
-      detectedLon = d.results[0].lon;
-      detectedCity = d.results[0].display_name.split(",")[0];
-    }
-  } catch (e) {}
-  window.confirmCity();
-};
 
 // ========== SEARCH ==========
 let searchTimeout;
@@ -921,7 +854,6 @@ function processApifyResults(items, fromCache) {
         addBotMessage("⚠ В выделенной области ничего не найдено");
         return;
     }
-
     state.organizations = filtered.map(x => ({
         name: x.name,
         amenity: mapApifyCategory(x.category),
@@ -939,20 +871,16 @@ function processApifyResults(items, fromCache) {
     ).join("
 ");
     state.activeFilter = null;
-
     state.heatLayer = L.heatLayer(filtered.map(o => [o.lat, o.lon, 1]), {
         radius: 22, blur: 18,
         gradient: { 0.2: "#7c5cff", 0.5: "#a472ff", 0.7: "#d68aff", 1: "#ff8eb8" }
     }).addTo(map);
-
     renderApifyMarkers();
     showScores(state.scores);
-
     const topPlaces = filtered
         .filter(x => x.rating >= 4.5 && x.reviews_count >= 10)
         .sort((a, b) => (b.reviews_count || 0) - (a.reviews_count || 0))
         .slice(0, 3);
-
     let msg = (fromCache ? "⚡ " : "✓ ") + "Готово! Яндекс.Карты
 Индекс: " + state.scores.overall + "/100
 Заведений: " + filtered.length;
@@ -966,7 +894,6 @@ function processApifyResults(items, fromCache) {
 • " + p.name + " (★" + p.rating + ")"; });
     }
     addBotMessage(msg);
-
     document.getElementById("report-btn").style.display = "inline-flex";
     const scrapeBtn = document.getElementById("scrape-btn");
     if (scrapeBtn) scrapeBtn.style.display = "inline-flex";
@@ -1037,7 +964,6 @@ function calculateApifyScores(items) {
     const cats = countApifyCategories(items);
     const ratings = items.filter(x => x.rating > 0).map(x => x.rating);
     const avgRating = ratings.length ? Math.round(ratings.reduce((a,b)=>a+b,0)/ratings.length * 10) / 10 : 0;
-
     const food = Math.min(100, Math.round((cats["Еда"]||0)/total*280));
     const health = Math.min(100, Math.round((cats["Здоровье"]||0)/area/5*100));
     const sport = Math.min(100, Math.round((cats["Спорт"]||0)/area/3*100));
@@ -1048,7 +974,6 @@ function calculateApifyScores(items) {
     const div = Math.min(100, Math.round(Object.keys(cats).length/10*100));
     const ratingBonus = avgRating > 3 ? Math.round((avgRating - 3) * 5) : 0;
     const overall = Math.min(100, Math.round(density*0.15+food*0.15+health*0.15+sport*0.1+edu*0.1+shop*0.15+div*0.15+ratingBonus));
-
     return {
         overall, density, food, health, sport, education: edu,
         shopping: shop, entertainment: fun, diversity: div,
@@ -1078,11 +1003,13 @@ const CAT_COLORS = {
     "Досуг": "#a29bfe", "Авто": "#fd9644", "Финансы": "#20bf6b",
     "Услуги": "#778ca3", "Разнообразие": "#7c5cff"
 };
+
 function toggleFilter(c) {
     state.activeFilter = state.activeFilter === c ? null : c;
     renderFilteredMarkers();
     showScores(state.scores);
 }
+
 function renderFilteredMarkers() {
     if (state.markersLayer) map.removeLayer(state.markersLayer);
     state.markersLayer = L.layerGroup();
@@ -1129,7 +1056,6 @@ function showScores(s) {
     html += '<div class="score-big">' + s.overall + '/100</div>';
     html += '<div class="score-sub">' + s.total_places + ' мест · ' + s.area_km2 + ' км²</div>';
     html += '</div>';
-
     html += '<div class="score-card density-card">';
     html += '<div class="score-label">Плотность POI</div>';
     html += '<div style="display:flex;justify-content:space-between;align-items:flex-end;margin-top:4px">';
@@ -1142,7 +1068,6 @@ function showScores(s) {
     else if (dLevel > 30) { dLabel = "Средняя"; dColor = "var(--warning)"; }
     html += '<div style="color:' + dColor + ';font-size:12px;font-weight:600">' + dLabel + '</div>';
     html += '</div></div>';
-
     if (s.avg_rating) {
         html += '<div class="score-card">';
         html += '<div class="score-label">Средний рейтинг</div>';
@@ -1150,13 +1075,12 @@ function showScores(s) {
         html += '<div class="score-sub">по данным Яндекс.Карт</div>';
         html += '</div>';
     }
-
-  const metrics = [
-      { label: "Еда", value: s.food }, { label: "Здоровье", value: s.health },
-      { label: "Шопинг", value: s.shopping }, { label: "Спорт", value: s.sport },
-      { label: "Образование", value: s.education }, { label: "Досуг", value: s.entertainment },
-      { label: "Разнообразие", value: s.diversity }
-  ];
+    const metrics = [
+        { label: "Еда", value: s.food }, { label: "Здоровье", value: s.health },
+        { label: "Шопинг", value: s.shopping }, { label: "Спорт", value: s.sport },
+        { label: "Образование", value: s.education }, { label: "Досуг", value: s.entertainment },
+        { label: "Разнообразие", value: s.diversity }
+    ];
     html += '<div class="score-card"><div class="score-label">Метрики</div><div class="metrics-grid">';
     metrics.forEach(m => {
         const color = m.value >= 60 ? "var(--success)" : m.value >= 30 ? "var(--warning)" : "var(--destructive)";
@@ -1184,11 +1108,9 @@ async function generateReport() {
     btn.innerHTML = '<i data-lucide="loader" class="spinning"></i> Генерация...';
     lucide.createIcons();
     trackRequest();
-
     try {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 95000);
-
         const r = await fetch("/api/report", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -1200,7 +1122,6 @@ async function generateReport() {
             signal: controller.signal
         });
         clearTimeout(timeoutId);
-
         if (!r.ok) {
             const txt = await r.text();
             addBotMessage("✗ Ошибка " + r.status + ": " + txt.substring(0, 200));
@@ -1250,6 +1171,7 @@ function renderCharts() {
         options: { responsive: true, maintainAspectRatio: false, scales: { r: { min: 0, max: 100, ticks: { color: "#666", backdropColor: "transparent" } } }, plugins: { legend: { display: false } } }
     });
 }
+
 function closeReport() { document.getElementById("report-modal").style.display = "none"; }
 
 // ========== PDF ==========
@@ -1285,60 +1207,47 @@ function openAnalyzeModal(mode) {
         addBotMessage("⚠ Сначала выделите область на карте");
         return;
     }
-
     const isPro = mode === 'pro';
     const cats = ["Еда", "Здоровье", "Шопинг", "Красота", "Спорт", "Образование", "Досуг", "Авто", "Финансы", "Услуги"];
-
     const container = document.getElementById("analyze-modal-content");
     container.innerHTML = "";
-
     const closeBtn = document.createElement("button");
     closeBtn.className = "modal-close";
     closeBtn.textContent = "×";
     closeBtn.onclick = closeAnalyzeModal;
     container.appendChild(closeBtn);
-
     const h2 = document.createElement("h2");
     h2.textContent = isPro ? "💎 Премиум-анализ" : "⚡ Быстрый анализ";
     container.appendChild(h2);
-
     const p = document.createElement("p");
     p.textContent = isPro ? "Свежие данные с Яндекс.Карт" : "Данные из OpenStreetMap (бесплатно)";
     container.appendChild(p);
-
     if (isPro) {
         const depthSection = document.createElement("div");
         depthSection.className = "opt-section";
         depthSection.innerHTML = '<h3>Глубина анализа</h3>';
-
         const toggle = document.createElement("div");
         toggle.className = "opt-toggle";
-
         const btnBasic = document.createElement("button");
         btnBasic.className = "opt-toggle-btn active";
         btnBasic.id = "depth-basic";
         btnBasic.innerHTML = 'Обычный<span class="opt-desc">Названия + рейтинги (1-3 мин)</span>';
         btnBasic.onclick = function() { selectDepth("basic"); };
-
         const btnAi = document.createElement("button");
         btnAi.className = "opt-toggle-btn";
         btnAi.id = "depth-ai";
         btnAi.innerHTML = 'AI-анализ отзывов<span class="opt-desc">Саммари отзывов (5-10 мин)</span>';
         btnAi.onclick = function() { selectDepth("ai"); };
-
         toggle.appendChild(btnBasic);
         toggle.appendChild(btnAi);
         depthSection.appendChild(toggle);
         container.appendChild(depthSection);
     }
-
     const catSection = document.createElement("div");
     catSection.className = "opt-section";
     catSection.innerHTML = '<h3>Категории</h3>';
-
     const grid = document.createElement("div");
     grid.className = "opt-cat-grid";
-
     cats.forEach((c, i) => {
         const label = document.createElement("label");
         const cb = document.createElement("input");
@@ -1350,16 +1259,13 @@ function openAnalyzeModal(mode) {
         label.appendChild(document.createTextNode(" " + c));
         grid.appendChild(label);
     });
-
     catSection.appendChild(grid);
     container.appendChild(catSection);
-
     const runBtn = document.createElement("button");
     runBtn.className = "btn-primary";
     runBtn.textContent = "Запустить анализ";
     runBtn.onclick = function() { runAnalysis(mode); };
     container.appendChild(runBtn);
-
     document.getElementById("analyze-modal").style.display = "flex";
     window._analyzeDepth = "basic";
 }
@@ -1379,9 +1285,7 @@ function selectDepth(d) {
 async function runAnalysis(mode) {
     const checked = Array.from(document.querySelectorAll('input[name="cat-opt"]:checked')).map(x => x.value);
     if (checked.length === 0) { alert("Выберите хотя бы одну категорию"); return; }
-
     closeAnalyzeModal();
-
     state.reportCache = null;
     state.scrapedData = [];
     state.scrapeRunId = null;
@@ -1390,7 +1294,6 @@ async function runAnalysis(mode) {
     if (state.markersLayer) { map.removeLayer(state.markersLayer); state.markersLayer = null; }
     if (state.scrapedMarkersLayer) { map.removeLayer(state.scrapedMarkersLayer); state.scrapedMarkersLayer = null; }
     trackRequest();
-
     if (mode === 'free') {
         await runFreeAnalysis(checked);
     } else {
@@ -1404,7 +1307,6 @@ async function runFreeAnalysis(categories) {
     btn.innerHTML = '<i data-lucide="loader" class="spinning"></i> Анализ...';
     lucide.createIcons();
     addBotMessage("🔄 Загружаю данные из OpenStreetMap...");
-
     try {
         const r = await fetch("/api/analyze", {
             method: "POST",
@@ -1413,13 +1315,11 @@ async function runFreeAnalysis(categories) {
         });
         const data = await r.json();
         if (data.error) { addBotMessage("⚠ " + data.error); return; }
-
         state.organizations = data.organizations;
         state.scores = data.scores;
         state.categories = data.categories;
         state.orgText = data.org_text;
         state.activeFilter = null;
-
         if (state.heatLayer) map.removeLayer(state.heatLayer);
         const filtered = data.organizations.filter(o => isInsideDrawn(o.lat, o.lon));
         if (filtered.length > 0) {
@@ -1430,7 +1330,6 @@ async function runFreeAnalysis(categories) {
         }
         renderFilteredMarkers();
         showScores(data.scores);
-
         const namedCount = data.organizations.length;
         const hiddenCount = data.scores.total_places - namedCount;
         let msg = "✓ Индекс: " + data.scores.overall + "/100
@@ -1441,7 +1340,6 @@ async function runFreeAnalysis(categories) {
 
 Кликайте по метрикам слева для фильтра";
         addBotMessage(msg);
-
         saveToHistory("free", filtered.length, data.scores.overall);
         document.getElementById("report-btn").style.display = "inline-flex";
         document.getElementById("quick-questions").style.display = "flex";
@@ -1466,15 +1364,12 @@ async function runProAnalysis(categories, enrichData) {
 Запустить?");
         if (!ok) return;
     }
-
     const btn = document.getElementById("analyze-pro-btn");
     btn.disabled = true;
     btn.innerHTML = '<i data-lucide="loader" class="spinning"></i> Парсим...';
     lucide.createIcons();
-
     const msg = enrichData ? "🤖 AI-анализ отзывов (5-10 мин)..." : "🔄 Парсинг Яндекс.Карт (1-3 мин)...";
     addBotMessage(msg);
-
     try {
         const r = await fetch("/api/scrape/start", {
             method: "POST",
@@ -1559,6 +1454,7 @@ function addBotMessage(t) {
     c.appendChild(d);
     c.scrollTop = c.scrollHeight;
 }
+
 function addUserMessage(t) {
     state.chatHistory.push({ role: "user", content: t });
     const c = document.getElementById("chat-messages");
@@ -1568,6 +1464,7 @@ function addUserMessage(t) {
     c.appendChild(d);
     c.scrollTop = c.scrollHeight;
 }
+
 function addLoading() {
     removeLoading();
     const c = document.getElementById("chat-messages");
@@ -1576,12 +1473,15 @@ function addLoading() {
     d.innerHTML = '<div class="dot"></div><div class="dot"></div><div class="dot"></div>';
     c.appendChild(d); c.scrollTop = c.scrollHeight;
 }
+
 function removeLoading() { const el = document.getElementById("loading-msg"); if (el) el.remove(); }
+
 function setChatBusy(b) {
     state.chatBusy = b;
     document.querySelectorAll(".btn-chip").forEach(x => { x.disabled = b; x.style.opacity = b ? "0.4" : "1"; });
     const s = document.getElementById("send-btn"); if (s) s.disabled = b;
 }
+
 async function sendMessage() {
     if (state.chatBusy) return;
     const i = document.getElementById("chat-input"), t = i.value.trim();
@@ -1652,4 +1552,8 @@ function markdownToHtml(t) {
 /g, "<br>");
 }
 
-setTimeout(() => lucide.createIcons(), 100);
+// Запуск инициализации города
+setTimeout(() => {
+    initCity();
+    lucide.createIcons();
+}, 100);
