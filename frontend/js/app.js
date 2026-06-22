@@ -13,15 +13,7 @@ window.confirmCity = function() {
     map.setView([detectedLat, detectedLon], 13);
     const modal = document.getElementById("city-modal");
     if (modal) modal.style.display = "none";
-    const msg = "Привет! Я AI-урбанист
-
-Город: " + detectedCity + "
-
-Выберите интересующую вас область с помощью:
-⬡ многоугольника или ▢ прямоугольника с левой стороны карты
-→ далее нажмите Анализ
-
-Вы можете изменить точки области или удалить неудачную через меню редактирования.";
+    const msg = "Привет! Я AI-урбанист\n\nГород: " + detectedCity + "\n\nВыберите интересующую вас область с помощью:\n⬡ многоугольника или ▢ прямоугольника с левой стороны карты\n→ далее нажмите Анализ\n\nВы можете изменить точки области или удалить неудачную через меню редактирования.";
     addBotMessage(msg);
 };
 
@@ -31,15 +23,7 @@ window.skipCity = function() {
     map.setView([55.7558, 37.6173], 13);
     const modal = document.getElementById("city-modal");
     if (modal) modal.style.display = "none";
-    const msg = "Привет! Я AI-урбанист
-
-Город: Москва
-
-Выберите интересующую вас область с помощью:
-⬡ многоугольника или ▢ прямоугольника с левой стороны карты
-→ далее нажмите Анализ
-
-Вы можете изменить точки области или удалить неудачную через меню редактирования.";
+    const msg = "Привет! Я AI-урбанист\n\nГород: Москва\n\nВыберите интересующую вас область с помощью:\n⬡ многоугольника или ▢ прямоугольника с левой стороны карты\n→ далее нажмите Анализ\n\nВы можете изменить точки области или удалить неудачную через меню редактирования.";
     addBotMessage(msg);
 };
 
@@ -771,15 +755,7 @@ function initCity() {
         const d = JSON.parse(saved);
         map.setView([d.lat, d.lon], 13);
         document.getElementById("city-modal").style.display = "none";
-        addBotMessage("Привет! Я AI-урбанист
-
-Город: " + d.name + "
-
-Выберите интересующую вас область с помощью:
-⬡ многоугольника или ▢ прямоугольника с левой стороны карты
-→ далее нажмите «Анализ»
-
-Вы можете изменить точки области или удалить неудачную через меню редактирования.");
+        addBotMessage("Привет! Я AI-урбанист\n\nГород: " + d.name + "\n\nВыберите интересующую вас область с помощью:\n⬡ многоугольника или ▢ прямоугольника с левой стороны карты\n→ далее нажмите «Анализ»\n\nВы можете изменить точки области или удалить неудачную через меню редактирования.");
         return;
     }
     document.getElementById("city-modal").style.display = "flex";
@@ -868,8 +844,7 @@ function processApifyResults(items, fromCache) {
     state.categories = countApifyCategories(filtered);
     state.orgText = filtered.slice(0, 30).map(x =>
         "- " + x.name + " [" + (x.category || "?") + "] ★" + (x.rating || "?")
-    ).join("
-");
+    ).join("\n");
     state.activeFilter = null;
     state.heatLayer = L.heatLayer(filtered.map(o => [o.lat, o.lon, 1]), {
         radius: 22, blur: 18,
@@ -881,17 +856,11 @@ function processApifyResults(items, fromCache) {
         .filter(x => x.rating >= 4.5 && x.reviews_count >= 10)
         .sort((a, b) => (b.reviews_count || 0) - (a.reviews_count || 0))
         .slice(0, 3);
-    let msg = (fromCache ? "⚡ " : "✓ ") + "Готово! Яндекс.Карты
-Индекс: " + state.scores.overall + "/100
-Заведений: " + filtered.length;
-    if (state.scores.avg_rating) msg += "
-Средний рейтинг: ★" + state.scores.avg_rating;
+    let msg = (fromCache ? "⚡ " : "✓ ") + "Готово! Яндекс.Карты\nИндекс: " + state.scores.overall + "/100\nЗаведений: " + filtered.length;
+    if (state.scores.avg_rating) msg += "\nСредний рейтинг: ★" + state.scores.avg_rating;
     if (topPlaces.length > 0) {
-        msg += "
-
-⭐ Топ:";
-        topPlaces.forEach(p => { msg += "
-• " + p.name + " (★" + p.rating + ")"; });
+        msg += "\n\n⭐ Топ:";
+        topPlaces.forEach(p => { msg += "\n• " + p.name + " (★" + p.rating + ")"; });
     }
     addBotMessage(msg);
     document.getElementById("report-btn").style.display = "inline-flex";
@@ -1085,7 +1054,7 @@ function showScores(s) {
     metrics.forEach(m => {
         const color = m.value >= 60 ? "var(--success)" : m.value >= 30 ? "var(--warning)" : "var(--destructive)";
         const active = state.activeFilter === m.label ? "active" : "";
-        html += '<div class="metric-row ' + active + '" onclick="toggleFilter('' + m.label + '')">';
+        html += '<div class="metric-row ' + active + '" onclick="toggleFilter(\'' + m.label + '\')">';
         html += '<span class="metric-dot" style="background:' + (CAT_COLORS[m.label] || "#7c5cff") + '"></span>';
         html += '<span class="metric-label">' + m.label + '</span>';
         html += '<div class="metric-bar-bg"><div class="metric-bar-fill" style="width:' + m.value + '%;background:' + color + '"></div></div>';
@@ -1332,13 +1301,9 @@ async function runFreeAnalysis(categories) {
         showScores(data.scores);
         const namedCount = data.organizations.length;
         const hiddenCount = data.scores.total_places - namedCount;
-        let msg = "✓ Индекс: " + data.scores.overall + "/100
-Именованных мест: " + namedCount;
-        if (hiddenCount > 0) msg += "
-(скрыто " + hiddenCount + " безымянных)";
-        msg += "
-
-Кликайте по метрикам слева для фильтра";
+        let msg = "✓ Индекс: " + data.scores.overall + "/100\nИменованных мест: " + namedCount;
+        if (hiddenCount > 0) msg += "\n(скрыто " + hiddenCount + " безымянных)";
+        msg += "\n\nКликайте по метрикам слева для фильтра";
         addBotMessage(msg);
         saveToHistory("free", filtered.length, data.scores.overall);
         document.getElementById("report-btn").style.display = "inline-flex";
@@ -1359,9 +1324,7 @@ async function runProAnalysis(categories, enrichData) {
         return;
     }
     if (!isPro) {
-        const ok = confirm("💎 Премиум-анализ (~$0.4-1 за запрос).
-На этапе тестирования бесплатно.
-Запустить?");
+        const ok = confirm("💎 Премиум-анализ (~$0.4-1 за запрос).\nНа этапе тестирования бесплатно.\nЗапустить?");
         if (!ok) return;
     }
     const btn = document.getElementById("analyze-pro-btn");
@@ -1548,8 +1511,7 @@ function markdownToHtml(t) {
     return t.replace(/^## (.+)$/gm, "<h2>$1</h2>")
             .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
             .replace(/\*(.*?)\*/g, "<em>$1</em>")
-            .replace(/
-/g, "<br>");
+            .replace(/\n/g, "<br>");
 }
 
 // Запуск инициализации города
