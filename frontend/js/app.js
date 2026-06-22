@@ -514,9 +514,11 @@ function updateUI() {
     if (!drawToolbar) return;
     const counter = document.getElementById("point-counter");
     if (counter) counter.textContent = pointCount + "/" + getMaxPoints();
+
     const btnFinish = document.getElementById("btn-finish-polygon");
     const btnCancel = document.getElementById("btn-cancel-polygon");
     const btnUndo = document.getElementById("btn-undo-polygon");
+
     if (btnFinish) {
         if (pointCount >= getMinFinishPoints()) {
             btnFinish.style.opacity = "1";
@@ -526,10 +528,12 @@ function updateUI() {
             btnFinish.style.pointerEvents = "none";
         }
     }
+
     if (btnCancel) {
         btnCancel.style.opacity = "1";
         btnCancel.style.pointerEvents = "auto";
     }
+
     if (btnUndo) {
         btnUndo.style.display = currentMode === "rectangle" ? "none" : "flex";
     }
@@ -542,11 +546,20 @@ function createToolbar() {
         updateUI();
         return drawToolbar;
     }
+
     drawToolbar = document.createElement("div");
     drawToolbar.id = "custom-draw-toolbar";
     drawToolbar.style.cssText = "position:absolute;bottom:32px;left:50%;transform:translateX(-50%);z-index:99999;display:flex;gap:8px;padding:10px 14px;background:var(--card,#222);border:1px solid var(--border,#444);border-radius:12px;box-shadow:0 10px 40px rgba(0,0,0,0.4);pointer-events:auto;";
+
+    // ИСПРАВЛЕНИЕ 1: Блокируем прокликивание тулбара на карту
+    ["mousedown", "mouseup", "click", "touchstart", "dblclick"].forEach(function(evt) {
+        drawToolbar.addEventListener(evt, function(e) { e.stopPropagation(); e.preventDefault(); }, true);
+    });
+
     const baseBtn = "padding:8px 16px;border-radius:8px;border:1px solid var(--border,#444);background:var(--secondary,#333);color:var(--foreground,#fff);font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;font-family:inherit;transition:all 0.15s;";
+
     const btnCancel = document.createElement("button");
+    btnCancel.id = "btn-cancel-polygon";
     btnCancel.style.cssText = baseBtn;
     btnCancel.innerHTML = "✕ Отмена";
     btnCancel.onmouseenter = function() { this.style.background = "var(--accent)"; };
@@ -555,6 +568,7 @@ function createToolbar() {
         e.stopPropagation();
         if (currentHandler && currentHandler.disable) currentHandler.disable();
     };
+
     const btnUndo = document.createElement("button");
     btnUndo.id = "btn-undo-polygon";
     btnUndo.style.cssText = baseBtn;
@@ -569,6 +583,7 @@ function createToolbar() {
             updateUI();
         }
     };
+
     const btnFinish = document.createElement("button");
     btnFinish.id = "btn-finish-polygon";
     btnFinish.style.cssText = "padding:8px 16px;border-radius:8px;border:none;background:var(--primary);color:white;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;font-family:inherit;transition:opacity 0.15s;opacity:0.4;pointer-events:none;";
@@ -579,17 +594,21 @@ function createToolbar() {
         e.stopPropagation();
         if (!currentHandler || pointCount < getMinFinishPoints()) return;
         if (currentMode === "rectangle") {
-            if (typeof currentHandler._fireCreatedEvent === "function") currentHandler._fireCreatedEvent();
-            currentHandler.disable();
+            // Вызываем нашу новую функцию завершения
+            if (typeof currentHandler._completeFromClick === "function") currentHandler._completeFromClick();
+            else currentHandler.disable();
         } else if (typeof currentHandler.completeShape === "function") {
             currentHandler.completeShape();
         }
     };
+
     drawToolbar.appendChild(btnCancel);
     drawToolbar.appendChild(btnUndo);
     drawToolbar.appendChild(btnFinish);
+
     const mapSection = document.getElementById("map-section");
     (mapSection || document.body).appendChild(drawToolbar);
+
     drawToolbar.style.display = "flex";
     if (typeof lucide !== "undefined") lucide.createIcons();
     return drawToolbar;
@@ -619,54 +638,79 @@ function clearAnalysisUI() {
     if (sp) { sp.style.display = "none"; sp.innerHTML = ""; }
 }
 
-// ПАТЧ: прямоугольник по двум кликам (без удержания мыши)
+// ПАТЧ: прямоугольник по двум кликам (ИСПРАВЛЕНИЕ 2: Ручной превью-слой вместо несуществующего _drawShape)
 function patchRectangleTool() {
     if (!L.Draw || !L.Draw.Rectangle || L.Draw.Rectangle.prototype._qpPatched) return;
     const RP = L.Draw.Rectangle.prototype;
     RP._qpPatched = true;
+
     const origAdd = RP.addHooks;
     const origRemove = RP.removeHooks;
+
     RP.addHooks = function() {
         origAdd.call(this);
         if (!this._map) return;
         this._qpStartLatLng = null;
-        this._qpClickHandler = this._qpClickHandler || this._onQPClick.bind(this);
-        this._qpMoveHandler = this._qpMoveHandler || this._onQPMove.bind(this);
+        this._qpTempLayer = null;
+        this._qpLastLatLng = null;
+        this._qpClickHandler = this._onQPClick.bind(this);
+        this._qpMoveHandler = this._onQPMove.bind(this);
         if (this._map.dragging) this._map.dragging.disable();
         if (this._map.doubleClickZoom) this._map.doubleClickZoom.disable();
         this._map.on("click", this._qpClickHandler, this);
         this._map.on("mousemove", this._qpMoveHandler, this);
         this._map.getContainer().style.cursor = "crosshair";
     };
+
     RP.removeHooks = function() {
         origRemove.call(this);
         if (!this._map) return;
         this._map.off("click", this._qpClickHandler, this);
         this._map.off("mousemove", this._qpMoveHandler, this);
+        if (this._qpTempLayer) { this._map.removeLayer(this._qpTempLayer); this._qpTempLayer = null; }
         if (this._map.dragging) this._map.dragging.enable();
         if (this._map.doubleClickZoom) this._map.doubleClickZoom.enable();
         this._map.getContainer().style.cursor = "";
         this._qpStartLatLng = null;
     };
+
     RP._onQPClick = function(e) {
         if (e.originalEvent && e.originalEvent.button !== 0) return;
+        
         if (!this._qpStartLatLng) {
             this._qpStartLatLng = e.latlng;
+            this._qpLastLatLng = e.latlng;
             currentMode = "rectangle";
             currentHandler = this;
             pointCount = 1;
             createToolbar();
             updateUI();
-            if (typeof this._drawShape === "function") this._drawShape(e.latlng);
+            const opts = (this.options && this.options.shapeOptions) || { color: "#7c5cff", fillOpacity: 0.15, weight: 2 };
+            this._qpTempLayer = L.rectangle([e.latlng, e.latlng], opts).addTo(this._map);
             return;
         }
+        
         pointCount = 2;
         updateUI();
-        if (typeof this._drawShape === "function") this._drawShape(e.latlng);
+        this._qpLastLatLng = e.latlng;
+        this._completeFromClick();
     };
+
     RP._onQPMove = function(e) {
-        if (!this._qpStartLatLng) return;
-        if (typeof this._drawShape === "function") this._drawShape(e.latlng);
+        if (!this._qpStartLatLng || !this._qpTempLayer) return;
+        this._qpLastLatLng = e.latlng;
+        this._qpTempLayer.setBounds(L.latLngBounds(this._qpStartLatLng, e.latlng));
+    };
+
+    RP._completeFromClick = function() {
+        if (!this._qpTempLayer || !this._qpStartLatLng || !this._qpLastLatLng) { this.disable(); return; }
+        const bounds = L.latLngBounds(this._qpStartLatLng, this._qpLastLatLng);
+        this._map.removeLayer(this._qpTempLayer);
+        this._qpTempLayer = null;
+        const opts = (this.options && this.options.shapeOptions) || { color: "#7c5cff", fillOpacity: 0.15, weight: 2 };
+        const layer = L.rectangle(bounds, opts);
+        this._map.fire(L.Draw.Event.CREATED, { layer: layer, layerType: "rectangle" });
+        this.disable();
     };
 }
 patchRectangleTool();
@@ -716,15 +760,24 @@ map.on(L.Draw.Event.DRAWSTOP, function() {
     }, 10);
 });
 
+// ИСПРАВЛЕНИЕ 3: Призраки после удаления (замена removeAllLayers на disable)
 map.on("draw:deleted", function(e) {
     drawnItems.clearLayers();
     state.bbox = null;
     state.drawnLayer = null;
-    if (drawControl && drawControl._toolbars && drawControl._toolbars.edit && drawControl._toolbars.edit._modes && drawControl._toolbars.edit._modes.remove) {
-        try {
-            drawControl._toolbars.edit._modes.remove.handler.removeAllLayers();
-        } catch(err) { console.log(err); }
-    }
+
+    try {
+        if (drawControl._toolbars && drawControl._toolbars.edit) {
+            const modes = drawControl._toolbars.edit._modes;
+            if (modes && modes.remove && modes.remove.handler) {
+                modes.remove.handler.disable();
+            }
+            if (drawControl._toolbars.edit._activeMode) {
+                drawControl._toolbars.edit._activeMode.handler.disable();
+            }
+        }
+    } catch(err) { console.log(err); }
+
     document.getElementById("actions-panel").style.display = "none";
     addBotMessage("Область удалена. Теперь можно выбрать новую.");
 });
