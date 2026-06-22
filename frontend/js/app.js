@@ -503,12 +503,8 @@ let currentHandler = null;
 let currentMode = "";
 let pointCount = 0;
 
-function getMaxPoints() {
-    return currentMode === "rectangle" ? 2 : MAX_POINTS;
-}
-function getMinFinishPoints() {
-    return currentMode === "rectangle" ? 2 : 3;
-}
+function getMaxPoints() { return currentMode === "rectangle" ? 2 : MAX_POINTS; }
+function getMinFinishPoints() { return currentMode === "rectangle" ? 2 : 3; }
 
 function updateUI() {
     if (!drawToolbar) return;
@@ -520,20 +516,14 @@ function updateUI() {
     const btnUndo = document.getElementById("btn-undo-polygon");
 
     if (btnFinish) {
-        if (pointCount >= getMinFinishPoints()) {
-            btnFinish.style.opacity = "1";
-            btnFinish.style.pointerEvents = "auto";
-        } else {
-            btnFinish.style.opacity = "0.4";
-            btnFinish.style.pointerEvents = "none";
-        }
+        const ready = pointCount >= getMinFinishPoints();
+        btnFinish.style.opacity = ready ? "1" : "0.4";
+        btnFinish.style.pointerEvents = ready ? "auto" : "none";
     }
-
     if (btnCancel) {
         btnCancel.style.opacity = "1";
         btnCancel.style.pointerEvents = "auto";
     }
-
     if (btnUndo) {
         btnUndo.style.display = currentMode === "rectangle" ? "none" : "flex";
     }
@@ -542,7 +532,6 @@ function updateUI() {
 function createToolbar() {
     if (drawToolbar) {
         drawToolbar.style.display = "flex";
-        if (typeof lucide !== "undefined") lucide.createIcons();
         updateUI();
         return drawToolbar;
     }
@@ -551,30 +540,21 @@ function createToolbar() {
     drawToolbar.id = "custom-draw-toolbar";
     drawToolbar.style.cssText = "position:absolute;bottom:32px;left:50%;transform:translateX(-50%);z-index:99999;display:flex;gap:8px;padding:10px 14px;background:var(--card,#222);border:1px solid var(--border,#444);border-radius:12px;box-shadow:0 10px 40px rgba(0,0,0,0.4);pointer-events:auto;";
 
-    // ИСПРАВЛЕНИЕ 1: Блокируем прокликивание тулбара на карту
-    ["mousedown", "mouseup", "click", "touchstart", "dblclick"].forEach(function(evt) {
-        drawToolbar.addEventListener(evt, function(e) { e.stopPropagation(); e.preventDefault(); }, true);
-    });
-
     const baseBtn = "padding:8px 16px;border-radius:8px;border:1px solid var(--border,#444);background:var(--secondary,#333);color:var(--foreground,#fff);font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;font-family:inherit;transition:all 0.15s;";
 
     const btnCancel = document.createElement("button");
     btnCancel.id = "btn-cancel-polygon";
     btnCancel.style.cssText = baseBtn;
     btnCancel.innerHTML = "✕ Отмена";
-    btnCancel.onmouseenter = function() { this.style.background = "var(--accent)"; };
-    btnCancel.onmouseleave = function() { this.style.background = "var(--secondary)"; };
     btnCancel.onclick = function(e) {
         e.stopPropagation();
-        if (currentHandler && currentHandler.disable) currentHandler.disable();
+        if (currentHandler && typeof currentHandler.disable === "function") currentHandler.disable();
     };
 
     const btnUndo = document.createElement("button");
     btnUndo.id = "btn-undo-polygon";
     btnUndo.style.cssText = baseBtn;
     btnUndo.innerHTML = "↶ Удалить точку";
-    btnUndo.onmouseenter = function() { this.style.background = "var(--accent)"; };
-    btnUndo.onmouseleave = function() { this.style.background = "var(--secondary)"; };
     btnUndo.onclick = function(e) {
         e.stopPropagation();
         if (currentHandler && currentMode === "polygon" && typeof currentHandler.deleteLastVertex === "function") {
@@ -588,13 +568,10 @@ function createToolbar() {
     btnFinish.id = "btn-finish-polygon";
     btnFinish.style.cssText = "padding:8px 16px;border-radius:8px;border:none;background:var(--primary);color:white;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;font-family:inherit;transition:opacity 0.15s;opacity:0.4;pointer-events:none;";
     btnFinish.innerHTML = "✓ Готово <span id='point-counter' style='opacity:0.7;font-size:11px;margin-left:4px'>0/" + getMaxPoints() + "</span>";
-    btnFinish.onmouseenter = function() { if (pointCount >= getMinFinishPoints()) this.style.opacity = "0.9"; };
-    btnFinish.onmouseleave = function() { this.style.opacity = pointCount >= getMinFinishPoints() ? "1" : "0.4"; };
     btnFinish.onclick = function(e) {
         e.stopPropagation();
         if (!currentHandler || pointCount < getMinFinishPoints()) return;
         if (currentMode === "rectangle") {
-            // Вызываем нашу новую функцию завершения
             if (typeof currentHandler._completeFromClick === "function") currentHandler._completeFromClick();
             else currentHandler.disable();
         } else if (typeof currentHandler.completeShape === "function") {
@@ -608,29 +585,20 @@ function createToolbar() {
 
     const mapSection = document.getElementById("map-section");
     (mapSection || document.body).appendChild(drawToolbar);
-
     drawToolbar.style.display = "flex";
-    if (typeof lucide !== "undefined") lucide.createIcons();
+    updateUI();
     return drawToolbar;
 }
 
-function hideToolbar() {
-    if (drawToolbar) drawToolbar.style.display = "none";
-}
+function hideToolbar() { if (drawToolbar) drawToolbar.style.display = "none"; }
 
 function clearAnalysisUI() {
     if (state.heatLayer) { map.removeLayer(state.heatLayer); state.heatLayer = null; }
     if (state.markersLayer) { map.removeLayer(state.markersLayer); state.markersLayer = null; }
     if (state.scrapedMarkersLayer) { map.removeLayer(state.scrapedMarkersLayer); state.scrapedMarkersLayer = null; }
-    state.organizations = [];
-    state.scores = {};
-    state.categories = {};
-    state.orgText = "";
-    state.scrapedData = [];
-    state.scrapeRunId = null;
-    state.scrapeEnriched = false;
-    state.reportCache = null;
-    state.activeFilter = null;
+    state.organizations = []; state.scores = {}; state.categories = {};
+    state.orgText = ""; state.scrapedData = []; state.scrapeRunId = null;
+    state.scrapeEnriched = false; state.reportCache = null; state.activeFilter = null;
     document.getElementById("actions-panel").style.display = "none";
     document.getElementById("report-btn").style.display = "none";
     document.getElementById("quick-questions").style.display = "none";
@@ -638,7 +606,7 @@ function clearAnalysisUI() {
     if (sp) { sp.style.display = "none"; sp.innerHTML = ""; }
 }
 
-// ПАТЧ: прямоугольник по двум кликам (ИСПРАВЛЕНИЕ 2: Ручной превью-слой вместо несуществующего _drawShape)
+// ПАТЧ: прямоугольник по двум кликам
 function patchRectangleTool() {
     if (!L.Draw || !L.Draw.Rectangle || L.Draw.Rectangle.prototype._qpPatched) return;
     const RP = L.Draw.Rectangle.prototype;
@@ -652,7 +620,6 @@ function patchRectangleTool() {
         if (!this._map) return;
         this._qpStartLatLng = null;
         this._qpTempLayer = null;
-        this._qpLastLatLng = null;
         this._qpClickHandler = this._onQPClick.bind(this);
         this._qpMoveHandler = this._onQPMove.bind(this);
         if (this._map.dragging) this._map.dragging.disable();
@@ -676,10 +643,8 @@ function patchRectangleTool() {
 
     RP._onQPClick = function(e) {
         if (e.originalEvent && e.originalEvent.button !== 0) return;
-        
         if (!this._qpStartLatLng) {
             this._qpStartLatLng = e.latlng;
-            this._qpLastLatLng = e.latlng;
             currentMode = "rectangle";
             currentHandler = this;
             pointCount = 1;
@@ -689,26 +654,23 @@ function patchRectangleTool() {
             this._qpTempLayer = L.rectangle([e.latlng, e.latlng], opts).addTo(this._map);
             return;
         }
-        
         pointCount = 2;
         updateUI();
-        this._qpLastLatLng = e.latlng;
-        this._completeFromClick();
+        if (typeof this._completeFromClick === "function") this._completeFromClick();
     };
 
     RP._onQPMove = function(e) {
         if (!this._qpStartLatLng || !this._qpTempLayer) return;
-        this._qpLastLatLng = e.latlng;
         this._qpTempLayer.setBounds(L.latLngBounds(this._qpStartLatLng, e.latlng));
     };
 
     RP._completeFromClick = function() {
-        if (!this._qpTempLayer || !this._qpStartLatLng || !this._qpLastLatLng) { this.disable(); return; }
-        const bounds = L.latLngBounds(this._qpStartLatLng, this._qpLastLatLng);
+        if (!this._qpTempLayer || !this._qpStartLatLng) { this.disable(); return; }
+        const finalBounds = this._qpTempLayer.getBounds();
         this._map.removeLayer(this._qpTempLayer);
         this._qpTempLayer = null;
         const opts = (this.options && this.options.shapeOptions) || { color: "#7c5cff", fillOpacity: 0.15, weight: 2 };
-        const layer = L.rectangle(bounds, opts);
+        const layer = L.rectangle(finalBounds, opts);
         this._map.fire(L.Draw.Event.CREATED, { layer: layer, layerType: "rectangle" });
         this.disable();
     };
@@ -722,29 +684,22 @@ map.on(L.Draw.Event.DRAWSTART, function(e) {
     pointCount = 0;
     createToolbar();
     updateUI();
-    setTimeout(function() {
-        document.querySelectorAll(".leaflet-draw-actions, .leaflet-draw-edit").forEach(function(el) {
-            el.style.display = "none";
-        });
-    }, 50);
+    setTimeout(() => document.querySelectorAll(".leaflet-draw-actions, .leaflet-draw-edit").forEach(el => el.style.display = "none"), 50);
 });
 
 map.on(L.Draw.Event.DRAWVERTEX, function(e) {
     if (!currentHandler || currentMode !== "polygon") return;
-    if (e.layers && typeof e.layers.getLayers === "function") {
-        pointCount = e.layers.getLayers().length;
-    } else if (currentHandler._markers) {
+    // Надёжный подсчёт вершин
+    if (currentHandler._markers) {
         pointCount = currentHandler._markers.length;
+    } else if (e.layers && e.layers.getLayers) {
+        pointCount = e.layers.getLayers().length;
     } else {
-        pointCount = Math.max(0, pointCount + 1);
+        pointCount++;
     }
     updateUI();
     if (pointCount >= MAX_POINTS && typeof currentHandler.completeShape === "function") {
-        setTimeout(function() {
-            if (currentHandler && typeof currentHandler.completeShape === "function") {
-                currentHandler.completeShape();
-            }
-        }, 50);
+        setTimeout(() => currentHandler.completeShape(), 50);
     }
 });
 
@@ -753,31 +708,20 @@ map.on(L.Draw.Event.DRAWSTOP, function() {
     currentHandler = null;
     currentMode = "";
     pointCount = 0;
-    setTimeout(function() {
-        document.querySelectorAll(".leaflet-draw-actions").forEach(function(el) {
-            el.style.display = "none";
-        });
-    }, 10);
+    setTimeout(() => document.querySelectorAll(".leaflet-draw-actions").forEach(el => el.style.display = "none"), 10);
 });
 
-// ИСПРАВЛЕНИЕ 3: Призраки после удаления (замена removeAllLayers на disable)
 map.on("draw:deleted", function(e) {
     drawnItems.clearLayers();
     state.bbox = null;
     state.drawnLayer = null;
-
     try {
         if (drawControl._toolbars && drawControl._toolbars.edit) {
             const modes = drawControl._toolbars.edit._modes;
-            if (modes && modes.remove && modes.remove.handler) {
-                modes.remove.handler.disable();
-            }
-            if (drawControl._toolbars.edit._activeMode) {
-                drawControl._toolbars.edit._activeMode.handler.disable();
-            }
+            if (modes && modes.remove && modes.remove.handler) modes.remove.handler.disable();
+            if (drawControl._toolbars.edit._activeMode) drawControl._toolbars.edit._activeMode.handler.disable();
         }
-    } catch(err) { console.log(err); }
-
+    } catch(err) {}
     document.getElementById("actions-panel").style.display = "none";
     addBotMessage("Область удалена. Теперь можно выбрать новую.");
 });
