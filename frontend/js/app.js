@@ -6,7 +6,6 @@ const APP_VERSION = "1.0";
 let detectedCity = "", detectedLat = 55.7558, detectedLon = 37.6173;
 let cityInitTimeout = null;
 
-// Определяем функции ДО использования в HTML
 window.confirmCity = function() {
     clearTimeout(cityInitTimeout);
     localStorage.setItem("qp_city", JSON.stringify({ name: detectedCity, lat: detectedLat, lon: detectedLon }));
@@ -505,64 +504,41 @@ let pointCount = 0;
 let uiUpdater = null;
 
 function updatePointCount() {
-    if (!currentHandler) {
-        pointCount = 0;
-        return;
-    }
-
+    if (!currentHandler) { pointCount = 0; return; }
     if (currentMode === "polygon" && currentHandler._markers) {
         pointCount = currentHandler._markers.length;
     } else if (currentMode === "rectangle") {
-        pointCount = currentHandler._qpStartLatLng ? (currentHandler._qpLastLatLng ? 2 : 1) : 0;
-    } else {
-        pointCount = 0;
-    }
-
+        pointCount = currentHandler._qpStart ? (currentHandler._qpLast ? 2 : 1) : 0;
+    } else { pointCount = 0; }
     if (pointCount > MAX_POINTS) pointCount = MAX_POINTS;
 }
 
 function updateToolbarUI() {
     updatePointCount();
-
     const counter = document.getElementById("point-counter");
     if (counter) counter.textContent = pointCount + "/" + (currentMode === "rectangle" ? 2 : MAX_POINTS);
-
     const finishBtn = document.getElementById("btn-finish");
     if (finishBtn) {
         const canFinish = pointCount >= (currentMode === "rectangle" ? 2 : 3);
         finishBtn.style.opacity = canFinish ? "1" : "0.4";
         finishBtn.style.pointerEvents = canFinish ? "auto" : "none";
     }
+    const undoBtn = document.getElementById("btn-undo");
+    if (undoBtn) undoBtn.style.display = currentMode === "rectangle" ? "none" : "";
 }
 
-function startUIUpdater() {
-    if (uiUpdater) clearInterval(uiUpdater);
-    uiUpdater = setInterval(updateToolbarUI, 50);
-}
-
-function stopUIUpdater() {
-    if (uiUpdater) {
-        clearInterval(uiUpdater);
-        uiUpdater = null;
-    }
-}
+function startUIUpdater() { if (uiUpdater) clearInterval(uiUpdater); uiUpdater = setInterval(updateToolbarUI, 50); }
+function stopUIUpdater() { if (uiUpdater) { clearInterval(uiUpdater); uiUpdater = null; } }
 
 function createToolbar() {
-    if (drawToolbar) {
-        drawToolbar.style.display = "flex";
-        startUIUpdater();
-        return;
-    }
-
+    if (drawToolbar) { drawToolbar.style.display = "flex"; startUIUpdater(); return; }
     drawToolbar = document.createElement("div");
     drawToolbar.id = "custom-draw-toolbar";
-    drawToolbar.style.cssText = `position:absolute;bottom:32px;left:50%;transform:translateX(-50%);z-index:100000;
-        display:flex;gap:10px;padding:10px 16px;background:var(--card,#222);border:1px solid var(--border,#444);
-        border-radius:12px;box-shadow:0 10px 40px rgba(0,0,0,0.5);pointer-events:auto;`;
+    drawToolbar.style.cssText = "position:absolute;bottom:32px;left:50%;transform:translateX(-50%);z-index:100000;display:flex;gap:10px;padding:10px 16px;background:var(--card,#222);border:1px solid var(--border,#444);border-radius:12px;box-shadow:0 10px 40px rgba(0,0,0,0.5);pointer-events:auto;";
 
-    // Блокируем все события, чтобы они не уходили на карту
-    drawToolbar.addEventListener("click", e => e.stopImmediatePropagation(), true);
-    drawToolbar.addEventListener("mousedown", e => e.stopImmediatePropagation(), true);
+    // ИСПРАВЛЕНИЕ: Только stopPropagation (без stopImmediatePropagation в capture!)
+    drawToolbar.addEventListener("click", e => e.stopPropagation());
+    drawToolbar.addEventListener("mousedown", e => e.stopPropagation());
 
     const style = "padding:9px 16px;border-radius:8px;font-weight:600;font-size:13px;cursor:pointer;";
 
@@ -582,8 +558,6 @@ function createToolbar() {
         if (currentMode === "polygon" && currentHandler) {
             if (typeof currentHandler.deleteLastVertex === "function") {
                 currentHandler.deleteLastVertex();
-            } else if (currentHandler._markers && currentHandler._markers.length > 0) {
-                currentHandler._markers.pop();
             }
             updateToolbarUI();
         }
@@ -592,11 +566,10 @@ function createToolbar() {
     const btnFinish = document.createElement("button");
     btnFinish.id = "btn-finish";
     btnFinish.style.cssText = style + "background:#7c5cff;border:none;color:white;";
-    btnFinish.innerHTML = `✓ Готово <span id="point-counter">0/${MAX_POINTS}</span>`;
+    btnFinish.innerHTML = "✓ Готово <span id='point-counter'>0/" + MAX_POINTS + "</span>";
     btnFinish.onclick = () => {
         updatePointCount();
         if (pointCount < (currentMode === "rectangle" ? 2 : 3)) return;
-
         if (currentMode === "rectangle" && typeof currentHandler._completeFromClick === "function") {
             currentHandler._completeFromClick();
         } else if (typeof currentHandler.completeShape === "function") {
@@ -604,12 +577,10 @@ function createToolbar() {
         } else if (currentHandler) {
             currentHandler.disable();
         }
-        killDrawing();
     };
 
     drawToolbar.append(btnCancel, btnUndo, btnFinish);
     document.getElementById("map-section").appendChild(drawToolbar);
-
     startUIUpdater();
 }
 
@@ -631,6 +602,7 @@ function patchRectangleTool() {
         origAdd.call(this);
         this._qpStart = null;
         this._qpTempLayer = null;
+        this._qpLast = null;
 
         this._onClickFixed = (e) => {
             if (!this._qpStart) {
@@ -642,18 +614,24 @@ function patchRectangleTool() {
                 return;
             }
             this._qpLast = e.latlng;
-            const bounds = L.latLngBounds(this._qpStart, this._qpLast);
-            this._map.removeLayer(this._qpTempLayer);
-            const finalRect = L.rectangle(bounds, this.options.shapeOptions);
-            this._map.fire(L.Draw.Event.CREATED, { layer: finalRect, layerType: "rectangle" });
-            this.disable();
-            killDrawing();
+            this._completeFromClick();
         };
 
         this._onMoveFixed = (e) => {
             if (this._qpStart && this._qpTempLayer) {
+                this._qpLast = e.latlng;
                 this._qpTempLayer.setBounds(L.latLngBounds(this._qpStart, e.latlng));
             }
+        };
+
+        L.Draw.Rectangle.prototype._completeFromClick = function() {
+            if (!this._qpTempLayer || !this._qpStart || !this._qpLast) { this.disable(); return; }
+            const bounds = L.latLngBounds(this._qpStart, this._qpLast);
+            this._map.removeLayer(this._qpTempLayer);
+            this._qpTempLayer = null;
+            const finalRect = L.rectangle(bounds, this.options.shapeOptions);
+            this._map.fire(L.Draw.Event.CREATED, { layer: finalRect, layerType: "rectangle" });
+            this.disable();
         };
 
         this._map.on("click", this._onClickFixed);
@@ -673,44 +651,26 @@ function patchRectangleTool() {
 patchRectangleTool();
 
 // ==================== ОСНОВНЫЕ СОБЫТИЯ ====================
-// Авто-завершение по лимиту
 let autoFinished = false;
 
-// draw start
 map.on('draw:drawstart', function (e) {
     if (e.layerType !== "polygon" && e.layerType !== "rectangle") return;
-
     autoFinished = false;
     currentHandler = e.handler;
     currentMode = e.layerType;
     pointCount = 0;
-
     createToolbar();
-    updateUI();
-
-    // прячем стандартные кнопки leaflet-draw (если мешают)
-    setTimeout(() => {
-        document.querySelectorAll(".leaflet-draw-actions, .leaflet-draw-edit").forEach(el => {
-            el.style.display = "none";
-        });
-    }, 50);
+    updateToolbarUI();
 });
 
-// vertex (точки) — критично для подсчёта и лимита
-map.on('draw:vertex', function (e) {
+// ИСПРАВЛЕНИЕ: Правильное имя события draw:drawvertex вместо draw:vertex
+map.on('draw:drawvertex', function (e) {
     if (!currentHandler || currentMode !== "polygon") return;
-
-    // Надёжный подсчёт вершин в leaflet-draw
     if (currentHandler._markers && Array.isArray(currentHandler._markers)) {
         pointCount = currentHandler._markers.length;
-    } else {
-        // fallback, если вдруг структура отличается
-        pointCount = Math.max(pointCount, 1);
     }
+    updateToolbarUI();
 
-    updateUI();
-
-    // Авто-завершение при достижении лимита
     if (!autoFinished && pointCount >= MAX_POINTS && typeof currentHandler.completeShape === "function") {
         autoFinished = true;
         setTimeout(() => {
@@ -721,20 +681,24 @@ map.on('draw:vertex', function (e) {
     }
 });
 
-// draw stop (конец режима)
 map.on('draw:drawstop', function () {
-    hideToolbar();
+    killDrawing();
+});
 
-    currentHandler = null;
-    currentMode = "";
-    pointCount = 0;
-    autoFinished = false;
-
-    setTimeout(() => {
-        document.querySelectorAll(".leaflet-draw-actions").forEach(el => {
-            el.style.display = "none";
-        });
-    }, 10);
+// ИСПРАВЛЕНИЕ: Добавлен обработчик удаления без призраков
+map.on("draw:deleted", function (e) {
+    drawnItems.clearLayers();
+    state.bbox = null;
+    state.drawnLayer = null;
+    try {
+        if (drawControl._toolbars && drawControl._toolbars.edit) {
+            const modes = drawControl._toolbars.edit._modes;
+            if (modes && modes.remove && modes.remove.handler) modes.remove.handler.disable();
+            if (drawControl._toolbars.edit._activeMode) drawControl._toolbars.edit._activeMode.handler.disable();
+        }
+    } catch(err) {}
+    document.getElementById("actions-panel").style.display = "none";
+    addBotMessage("Область удалена. Теперь можно выбрать новую.");
 });
 
 // ========== CITY INIT ==========
