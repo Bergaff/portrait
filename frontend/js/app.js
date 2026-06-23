@@ -658,14 +658,19 @@ map.on('draw:drawstart', function (e) {
     if (e.layerType !== "polygon" && e.layerType !== "rectangle") return;
 
     autoFinished = false;
-    currentHandler = e.handler;
     currentMode = e.layerType;
     pointCount = 0;
 
-    createToolbar();
-    updateToolbarUI(); // ИСПРАВЛЕНО: было updateUI()
+    // ИСПРАВЛЕНО: handler берём из drawControl, а НЕ из e.handler (его там нет!)
+    if (e.layerType === "polygon") {
+        currentHandler = drawControl._toolbars.draw._modes.polygon.handler;
+    }
+    // для rectangle currentHandler задаётся в патче при первом клике
 
-    // прячем стандартные кнопки leaflet-draw (если мешают)
+    createToolbar();
+    updateToolbarUI();
+
+    // прячем стандартные кнопки leaflet-draw
     setTimeout(() => {
         document.querySelectorAll(".leaflet-draw-actions, .leaflet-draw-edit").forEach(el => {
             el.style.display = "none";
