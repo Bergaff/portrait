@@ -653,24 +653,41 @@ patchRectangleTool();
 // ==================== ОСНОВНЫЕ СОБЫТИЯ ====================
 let autoFinished = false;
 
+// draw start
 map.on('draw:drawstart', function (e) {
     if (e.layerType !== "polygon" && e.layerType !== "rectangle") return;
+
     autoFinished = false;
     currentHandler = e.handler;
     currentMode = e.layerType;
     pointCount = 0;
+
     createToolbar();
-    updateToolbarUI();
+    updateToolbarUI(); // ИСПРАВЛЕНО: было updateUI()
+
+    // прячем стандартные кнопки leaflet-draw (если мешают)
+    setTimeout(() => {
+        document.querySelectorAll(".leaflet-draw-actions, .leaflet-draw-edit").forEach(el => {
+            el.style.display = "none";
+        });
+    }, 50);
 });
 
-// ИСПРАВЛЕНИЕ: Правильное имя события draw:drawvertex вместо draw:vertex
+// vertex (точки) — критично для подсчёта и лимита
 map.on('draw:drawvertex', function (e) {
     if (!currentHandler || currentMode !== "polygon") return;
+
+    // Надёжный подсчёт вершин в leaflet-draw
     if (currentHandler._markers && Array.isArray(currentHandler._markers)) {
         pointCount = currentHandler._markers.length;
+    } else {
+        // fallback, если вдруг структура отличается
+        pointCount = Math.max(pointCount, 1);
     }
-    updateToolbarUI();
 
+    updateToolbarUI(); // ИСПРАВЛЕНО: было updateUI()
+
+    // Авто-завершение при достижении лимита
     if (!autoFinished && pointCount >= MAX_POINTS && typeof currentHandler.completeShape === "function") {
         autoFinished = true;
         setTimeout(() => {
@@ -681,8 +698,9 @@ map.on('draw:drawvertex', function (e) {
     }
 });
 
+// draw stop (конец режима)
 map.on('draw:drawstop', function () {
-    killDrawing();
+    killDrawing(); // ИСПРАВЛЕНО: было hideToolbar()
 });
 
 // ИСПРАВЛЕНИЕ: Добавлен обработчик удаления без призраков
