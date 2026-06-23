@@ -736,7 +736,7 @@ map.on("draw:deleted", function (e) {
     state.bbox = null;
     state.drawnLayer = null;
     
-    // Полный сброс edit-тулбара, чтобы не осталось «призраков»
+    // Полный сброс edit-тулбара, чтобы не осталось призраков
     try {
         if (drawControl && drawControl._toolbars && drawControl._toolbars.edit) {
             const editToolbar = drawControl._toolbars.edit;
@@ -767,7 +767,7 @@ function initCity() {
         const d = JSON.parse(saved);
         map.setView([d.lat, d.lon], 13);
         document.getElementById("city-modal").style.display = "none";
-        addBotMessage("Привет! Я AI-урбанист\n\nГород: " + d.name + "\n\nВыберите интересующую вас область с помощью:\n⬡ многоугольника или ▢ прямоугольника с левой стороны карты\n→ далее нажмите «Анализ»\n\nВы можете изменить точки области или удалить неудачную через меню редактирования.");
+        addBotMessage("Привет! Я AI-урбанист\n\nГород: " + d.name + "\n\nВыберите интересующую вас область с помощью:\n⬡ многоугольника или ▢ прямоугольника с левой стороны карты\n→ далее нажмите Анализ\n\nВы можете изменить точки области или удалить неудачную через меню редактирования.");
         return;
     }
     document.getElementById("city-modal").style.display = "flex";
