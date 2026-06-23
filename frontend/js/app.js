@@ -495,7 +495,7 @@ map.on("draw:created", e => {
     state.reportCache = null;
 });
 
-# ========== ДОРАБОТКА РИСОВАНИЯ (ФИНАЛЬНАЯ ВЕРСИЯ) ==========
+// ========== ДОРАБОТКА РИСОВАНИЯ (ФИНАЛЬНАЯ ВЕРСИЯ) ==========
 const MAX_POINTS = 10;
 let drawToolbar = null;
 let currentHandler = null;
@@ -692,7 +692,6 @@ map.on('draw:drawstart', function (e) {
         });
     }, 50);
 });
-
 // vertex (точки) — критично для подсчёта и лимита
 map.on('draw:drawvertex', function (e) {
     if (!currentHandler || currentMode !== "polygon") return;
