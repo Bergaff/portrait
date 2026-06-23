@@ -673,26 +673,69 @@ function patchRectangleTool() {
 patchRectangleTool();
 
 // ==================== ОСНОВНЫЕ СОБЫТИЯ ====================
-map.on(L.Draw.Event.DRAWSTART, function (e) {
+// Авто-завершение по лимиту
+let autoFinished = false;
+
+// draw start
+map.on('draw:drawstart', function (e) {
     if (e.layerType !== "polygon" && e.layerType !== "rectangle") return;
+
+    autoFinished = false;
     currentHandler = e.handler;
     currentMode = e.layerType;
+    pointCount = 0;
+
     createToolbar();
+    updateUI();
+
+    // прячем стандартные кнопки leaflet-draw (если мешают)
+    setTimeout(() => {
+        document.querySelectorAll(".leaflet-draw-actions, .leaflet-draw-edit").forEach(el => {
+            el.style.display = "none";
+        });
+    }, 50);
 });
 
-map.on(L.Draw.Event.DRAWSTOP, function () {
-    killDrawing();
+// vertex (точки) — критично для подсчёта и лимита
+map.on('draw:vertex', function (e) {
+    if (!currentHandler || currentMode !== "polygon") return;
+
+    // Надёжный подсчёт вершин в leaflet-draw
+    if (currentHandler._markers && Array.isArray(currentHandler._markers)) {
+        pointCount = currentHandler._markers.length;
+    } else {
+        // fallback, если вдруг структура отличается
+        pointCount = Math.max(pointCount, 1);
+    }
+
+    updateUI();
+
+    // Авто-завершение при достижении лимита
+    if (!autoFinished && pointCount >= MAX_POINTS && typeof currentHandler.completeShape === "function") {
+        autoFinished = true;
+        setTimeout(() => {
+            if (currentHandler && typeof currentHandler.completeShape === "function") {
+                currentHandler.completeShape();
+            }
+        }, 0);
+    }
 });
 
-map.on("draw:deleted", function () {
-    drawnItems.clearLayers();
-    state.bbox = null;
-    state.drawnLayer = null;
-    document.getElementById("actions-panel").style.display = "none";
-    addBotMessage("Область удалена. Теперь можно выбрать новую.");
-});
+// draw stop (конец режима)
+map.on('draw:drawstop', function () {
+    hideToolbar();
 
-console.log("✅ Туловар рисования загружен (версия 4.0 - с постоянным обновлением)");
+    currentHandler = null;
+    currentMode = "";
+    pointCount = 0;
+    autoFinished = false;
+
+    setTimeout(() => {
+        document.querySelectorAll(".leaflet-draw-actions").forEach(el => {
+            el.style.display = "none";
+        });
+    }, 10);
+});
 
 // ========== CITY INIT ==========
 function initCity() {
