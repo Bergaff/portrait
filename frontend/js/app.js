@@ -495,7 +495,7 @@ map.on("draw:created", e => {
     state.reportCache = null;
 });
 
-// ========== ДОРАБОТКА РИСОВАНИЯ (ФИНАЛЬНАЯ ВЕРСИЯ) ==========
+# ========== ДОРАБОТКА РИСОВАНИЯ (ФИНАЛЬНАЯ ВЕРСИЯ) ==========
 const MAX_POINTS = 10;
 let drawToolbar = null;
 let currentHandler = null;
@@ -509,7 +509,9 @@ function updatePointCount() {
         pointCount = currentHandler._markers.length;
     } else if (currentMode === "rectangle") {
         pointCount = currentHandler._qpStart ? (currentHandler._qpLast ? 2 : 1) : 0;
-    } else { pointCount = 0; }
+    } else {
+        pointCount = 0;
+    }
     if (pointCount > MAX_POINTS) pointCount = MAX_POINTS;
 }
 
@@ -536,7 +538,6 @@ function createToolbar() {
     drawToolbar.id = "custom-draw-toolbar";
     drawToolbar.style.cssText = "position:absolute;bottom:32px;left:50%;transform:translateX(-50%);z-index:100000;display:flex;gap:10px;padding:10px 16px;background:var(--card,#222);border:1px solid var(--border,#444);border-radius:12px;box-shadow:0 10px 40px rgba(0,0,0,0.5);pointer-events:auto;";
 
-    // ИСПРАВЛЕНИЕ: Только stopPropagation (без stopImmediatePropagation в capture!)
     drawToolbar.addEventListener("click", e => e.stopPropagation());
     drawToolbar.addEventListener("mousedown", e => e.stopPropagation());
 
@@ -546,7 +547,10 @@ function createToolbar() {
     btnCancel.style.cssText = style + "background:#333;border:1px solid #555;color:#fff;";
     btnCancel.innerHTML = "✕ Отмена";
     btnCancel.onclick = () => {
-        if (currentHandler) currentHandler.disable();
+        if (currentHandler) {
+            currentHandler.disable();
+            currentHandler = null;
+        }
         killDrawing();
     };
 
@@ -558,8 +562,9 @@ function createToolbar() {
         if (currentMode === "polygon" && currentHandler) {
             if (typeof currentHandler.deleteLastVertex === "function") {
                 currentHandler.deleteLastVertex();
+                pointCount = Math.max(0, pointCount - 1);
+                updateToolbarUI();
             }
-            updateToolbarUI();
         }
     };
 
