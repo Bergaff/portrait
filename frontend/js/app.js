@@ -659,29 +659,24 @@ patchRectangleTool();
 let autoFinished = false;
 
 // draw start
-map.on('draw:drawstart', function (e) {
+map.on('draw:drawstart', function(e) {
     if (e.layerType !== "polygon" && e.layerType !== "rectangle") return;
 
+    // Убираем призраков перед новым рисованием
+    drawnItems.clearLayers();
+    state.drawnLayer = null;
+    state.bbox = null;
+    document.getElementById("actions-panel").style.display = "none";
+
     autoFinished = false;
+    currentHandler = e.handler;
     currentMode = e.layerType;
     pointCount = 0;
 
-    // ИСПРАВЛЕНО: handler берём из drawControl, а НЕ из e.handler (его там нет!)
-    if (e.layerType === "polygon") {
-        currentHandler = drawControl._toolbars.draw._modes.polygon.handler;
-    }
-    // для rectangle currentHandler задаётся в патче при первом клике
-
     createToolbar();
     updateToolbarUI();
-
-    // прячем стандартные кнопки leaflet-draw
-    setTimeout(() => {
-        document.querySelectorAll(".leaflet-draw-actions, .leaflet-draw-edit").forEach(el => {
-            el.style.display = "none";
-        });
-    }, 50);
 });
+
 
 // vertex (точки) — критично для подсчёта и лимита
 map.on('draw:drawvertex', function (e) {
@@ -714,17 +709,14 @@ map.on('draw:drawstop', function () {
 });
 
 // ИСПРАВЛЕНИЕ: Добавлен обработчик удаления без призраков
-map.on("draw:deleted", function (e) {
+map.on("draw:deleted", function(e) {
+    // Принудительно убираем слой с карты и полностью чистим
+    try { map.removeLayer(drawnItems); } catch(err) {}
     drawnItems.clearLayers();
+    map.addLayer(drawnItems);
+
     state.bbox = null;
     state.drawnLayer = null;
-    try {
-        if (drawControl._toolbars && drawControl._toolbars.edit) {
-            const modes = drawControl._toolbars.edit._modes;
-            if (modes && modes.remove && modes.remove.handler) modes.remove.handler.disable();
-            if (drawControl._toolbars.edit._activeMode) drawControl._toolbars.edit._activeMode.handler.disable();
-        }
-    } catch(err) {}
     document.getElementById("actions-panel").style.display = "none";
     addBotMessage("Область удалена. Теперь можно выбрать новую.");
 });
