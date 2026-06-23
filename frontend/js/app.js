@@ -662,20 +662,30 @@ let autoFinished = false;
 map.on('draw:drawstart', function (e) {
     if (e.layerType !== "polygon" && e.layerType !== "rectangle") return;
 
+    // Принудительно вырубаем редактирование/удаление перед рисованием
+    try {
+        if (drawControl && drawControl._toolbars && drawControl._toolbars.edit) {
+            const editToolbar = drawControl._toolbars.edit;
+            if (editToolbar._activeMode && editToolbar._activeMode.handler) {
+                editToolbar._activeMode.handler.disable();
+                editToolbar._activeMode = null;
+            }
+        }
+    } catch(err) {}
+
+    // Если область была удалена (bbox нет), чистим остатки
+    if (!state.bbox) {
+        drawnItems.clearLayers();
+    }
+
     autoFinished = false;
+    currentHandler = e.handler;
     currentMode = e.layerType;
     pointCount = 0;
-
-    // ИСПРАВЛЕНО: handler берём из drawControl, а НЕ из e.handler (его там нет!)
-    if (e.layerType === "polygon") {
-        currentHandler = drawControl._toolbars.draw._modes.polygon.handler;
-    }
-    // для rectangle currentHandler задаётся в патче при первом клике
 
     createToolbar();
     updateToolbarUI();
 
-    // прячем стандартные кнопки leaflet-draw
     setTimeout(() => {
         document.querySelectorAll(".leaflet-draw-actions, .leaflet-draw-edit").forEach(el => {
             el.style.display = "none";
@@ -715,16 +725,38 @@ map.on('draw:drawstop', function () {
 
 // ИСПРАВЛЕНИЕ: Добавлен обработчик удаления без призраков
 map.on("draw:deleted", function (e) {
+    // Удаляем конкретные слои из события
+    if (e.layers) {
+        e.layers.eachLayer(function(layer) {
+            drawnItems.removeLayer(layer);
+        });
+    }
+    // На всякий случай чистим всю группу
     drawnItems.clearLayers();
+    
     state.bbox = null;
     state.drawnLayer = null;
+    
+    // Полный сброс edit-тулбара, чтобы не осталось «призраков»
     try {
-        if (drawControl._toolbars && drawControl._toolbars.edit) {
-            const modes = drawControl._toolbars.edit._modes;
-            if (modes && modes.remove && modes.remove.handler) modes.remove.handler.disable();
-            if (drawControl._toolbars.edit._activeMode) drawControl._toolbars.edit._activeMode.handler.disable();
+        if (drawControl && drawControl._toolbars && drawControl._toolbars.edit) {
+            const editToolbar = drawControl._toolbars.edit;
+            // Сбрасываем активный режим (удаление/редактирование)
+            if (editToolbar._activeMode && editToolbar._activeMode.handler) {
+                editToolbar._activeMode.handler.disable();
+                editToolbar._activeMode = null;
+            }
+            // Отключаем все хендлеры на всякий случай
+            if (editToolbar._modes) {
+                Object.values(editToolbar._modes).forEach(function(m) {
+                    if (m.handler && typeof m.handler.disable === 'function') {
+                        m.handler.disable();
+                    }
+                });
+            }
         }
-    } catch(err) {}
+    } catch(err) { console.log("delete cleanup err", err); }
+    
     document.getElementById("actions-panel").style.display = "none";
     addBotMessage("Область удалена. Теперь можно выбрать новую.");
 });
