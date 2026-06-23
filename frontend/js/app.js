@@ -496,415 +496,203 @@ map.on("draw:created", e => {
     state.reportCache = null;
 });
 
-// ========== ДОРАБОТКА РИСОВАНИЯ ПОЛИГОНА И ПРЯМОУГОЛЬНИКА ==========
+// ========== ДОРАБОТКА РИСОВАНИЯ (ФИНАЛЬНАЯ ВЕРСИЯ) ==========
 const MAX_POINTS = 10;
 let drawToolbar = null;
 let currentHandler = null;
-let currentMode = ""; // polygon | rectangle
+let currentMode = "";
 let pointCount = 0;
-let pollTimer = null;
+let uiUpdater = null;
 
-function getMaxPoints() {
-    return currentMode === "rectangle" ? 2 : MAX_POINTS;
-}
-
-function getMinFinishPoints() {
-    return currentMode === "rectangle" ? 2 : 3;
-}
-
-function syncPoints() {
+function updatePointCount() {
     if (!currentHandler) {
         pointCount = 0;
         return;
     }
 
-    if (currentMode === "polygon") {
-        if (currentHandler._markers && Array.isArray(currentHandler._markers)) {
-            pointCount = currentHandler._markers.length;
-        } else {
-            pointCount = 0;
-        }
-        if (pointCount > MAX_POINTS) {
-            pointCount = MAX_POINTS;
-        }
-        return;
-    }
-
-    if (currentMode === "rectangle") {
+    if (currentMode === "polygon" && currentHandler._markers) {
+        pointCount = currentHandler._markers.length;
+    } else if (currentMode === "rectangle") {
+        pointCount = currentHandler._qpStartLatLng ? (currentHandler._qpLastLatLng ? 2 : 1) : 0;
+    } else {
         pointCount = 0;
-        if (currentHandler._qpStartLatLng) {
-            pointCount = 1;
-        }
-        if (currentHandler._qpStartLatLng && currentHandler._qpLastLatLng) {
-            pointCount = 2;
-        }
-        return;
     }
 
-    pointCount = 0;
+    if (pointCount > MAX_POINTS) pointCount = MAX_POINTS;
 }
 
-function updateUI() {
-    if (!drawToolbar) return;
-    syncPoints();
+function updateToolbarUI() {
+    updatePointCount();
 
-    const c = document.getElementById("point-counter");
-    if (c) {
-        c.textContent = pointCount + "/" + getMaxPoints();
-    }
+    const counter = document.getElementById("point-counter");
+    if (counter) counter.textContent = pointCount + "/" + (currentMode === "rectangle" ? 2 : MAX_POINTS);
 
-    const fin = document.getElementById("btn-finish");
-    if (fin) {
-        const ok = pointCount >= getMinFinishPoints();
-        fin.style.opacity = ok ? "1" : "0.4";
-        fin.style.pointerEvents = ok ? "auto" : "none";
-    }
-
-    const undo = document.getElementById("btn-undo");
-    if (undo) {
-        if (currentMode === "rectangle") {
-            undo.style.display = "none";
-        } else {
-            undo.style.display = "flex";
-            const can = pointCount > 0;
-            undo.style.opacity = can ? "1" : "0.4";
-            undo.style.pointerEvents = can ? "auto" : "none";
-        }
+    const finishBtn = document.getElementById("btn-finish");
+    if (finishBtn) {
+        const canFinish = pointCount >= (currentMode === "rectangle" ? 2 : 3);
+        finishBtn.style.opacity = canFinish ? "1" : "0.4";
+        finishBtn.style.pointerEvents = canFinish ? "auto" : "none";
     }
 }
 
-function startPolling() {
-    stopPolling();
-    pollTimer = setInterval(function () {
-        updateUI();
-
-        if (currentMode === "polygon") {
-            syncPoints();
-            if (pointCount >= MAX_POINTS && currentHandler && typeof currentHandler.completeShape === "function") {
-                try {
-                    currentHandler.completeShape();
-                } catch (e) {
-                    console.warn("completeShape error", e);
-                }
-                stopPolling();
-                hideToolbar();
-                return;
-            }
-        }
-    }, 40);
+function startUIUpdater() {
+    if (uiUpdater) clearInterval(uiUpdater);
+    uiUpdater = setInterval(updateToolbarUI, 50);
 }
 
-function stopPolling() {
-    if (pollTimer) {
-        clearInterval(pollTimer);
-        pollTimer = null;
+function stopUIUpdater() {
+    if (uiUpdater) {
+        clearInterval(uiUpdater);
+        uiUpdater = null;
     }
-}
-
-function hideToolbar() {
-    if (drawToolbar) {
-        drawToolbar.style.display = "none";
-    }
-}
-
-function killToolbar() {
-    stopPolling();
-    hideToolbar();
-    currentHandler = null;
-    currentMode = "";
-    pointCount = 0;
 }
 
 function createToolbar() {
     if (drawToolbar) {
         drawToolbar.style.display = "flex";
-        updateUI();
-        startPolling();
+        startUIUpdater();
         return;
     }
 
     drawToolbar = document.createElement("div");
-    drawToolbar.id = "qp-drawbar";
-    drawToolbar.style.cssText =
-        "position:absolute;bottom:28px;left:50%;transform:translateX(-50%);" +
-        "z-index:100000;padding:10px 14px;border-radius:12px;" +
-        "background:var(--card,#222);border:1px solid var(--border,#444);" +
-        "box-shadow:0 10px 40px rgba(0,0,0,.45);display:flex;gap:8px;pointer-events:auto;";
+    drawToolbar.id = "custom-draw-toolbar";
+    drawToolbar.style.cssText = `position:absolute;bottom:32px;left:50%;transform:translateX(-50%);z-index:100000;
+        display:flex;gap:10px;padding:10px 16px;background:var(--card,#222);border:1px solid var(--border,#444);
+        border-radius:12px;box-shadow:0 10px 40px rgba(0,0,0,0.5);pointer-events:auto;`;
 
-    ["click", "mousedown", "mouseup", "dblclick", "touchstart", "touchend"].forEach(function (ev) {
-        drawToolbar.addEventListener(ev, function (e) {
-            e.stopPropagation();
-        }, true);
-    });
+    // Блокируем все события, чтобы они не уходили на карту
+    drawToolbar.addEventListener("click", e => e.stopImmediatePropagation(), true);
+    drawToolbar.addEventListener("mousedown", e => e.stopImmediatePropagation(), true);
 
-    const base =
-        "padding:8px 16px;border-radius:8px;font-size:13px;font-weight:600;" +
-        "border:1px solid var(--border,#444);background:var(--secondary,#333);" +
-        "color:var(--foreground,#fff);cursor:pointer;display:flex;align-items:center;gap:6px;" +
-        "user-select:none;font-family:inherit;";
+    const style = "padding:9px 16px;border-radius:8px;font-weight:600;font-size:13px;cursor:pointer;";
 
-    const cancel = document.createElement("button");
-    cancel.type = "button";
-    cancel.style.cssText = base;
-    cancel.textContent = "✕ Отмена";
-    cancel.addEventListener("click", function (e) {
-        e.stopPropagation();
-        if (currentHandler && typeof currentHandler.disable === "function") {
+    const btnCancel = document.createElement("button");
+    btnCancel.style.cssText = style + "background:#333;border:1px solid #555;color:#fff;";
+    btnCancel.innerHTML = "✕ Отмена";
+    btnCancel.onclick = () => {
+        if (currentHandler) currentHandler.disable();
+        killDrawing();
+    };
+
+    const btnUndo = document.createElement("button");
+    btnUndo.id = "btn-undo";
+    btnUndo.style.cssText = style + "background:#333;border:1px solid #555;color:#fff;";
+    btnUndo.innerHTML = "↶ Удалить точку";
+    btnUndo.onclick = () => {
+        if (currentMode === "polygon" && currentHandler) {
+            if (typeof currentHandler.deleteLastVertex === "function") {
+                currentHandler.deleteLastVertex();
+            } else if (currentHandler._markers && currentHandler._markers.length > 0) {
+                currentHandler._markers.pop();
+            }
+            updateToolbarUI();
+        }
+    };
+
+    const btnFinish = document.createElement("button");
+    btnFinish.id = "btn-finish";
+    btnFinish.style.cssText = style + "background:#7c5cff;border:none;color:white;";
+    btnFinish.innerHTML = `✓ Готово <span id="point-counter">0/${MAX_POINTS}</span>`;
+    btnFinish.onclick = () => {
+        updatePointCount();
+        if (pointCount < (currentMode === "rectangle" ? 2 : 3)) return;
+
+        if (currentMode === "rectangle" && typeof currentHandler._completeFromClick === "function") {
+            currentHandler._completeFromClick();
+        } else if (typeof currentHandler.completeShape === "function") {
+            currentHandler.completeShape();
+        } else if (currentHandler) {
             currentHandler.disable();
         }
-        killToolbar();
-    }, true);
+        killDrawing();
+    };
 
-    const undo = document.createElement("button");
-    undo.type = "button";
-    undo.id = "btn-undo";
-    undo.style.cssText = base;
-    undo.textContent = "↶ Удалить точку";
-    undo.addEventListener("click", function (e) {
-        e.stopPropagation();
-        if (currentMode !== "polygon" || !currentHandler) return;
-        if (typeof currentHandler.deleteLastVertex === "function") {
-            currentHandler.deleteLastVertex();
-        } else if (currentHandler._markers && currentHandler._markers.length) {
-            const m = currentHandler._markers.pop();
-            if (currentHandler._markerGroup && m) {
-                currentHandler._markerGroup.removeLayer(m);
-            }
-            if (currentHandler._poly && typeof currentHandler._poly.setLatLngs === "function") {
-                currentHandler._poly.setLatLngs(currentHandler._markers.map(function (x) { return x.getLatLng(); }));
-            }
-        }
-        updateUI();
-    }, true);
+    drawToolbar.append(btnCancel, btnUndo, btnFinish);
+    document.getElementById("map-section").appendChild(drawToolbar);
 
-    const fin = document.createElement("button");
-    fin.type = "button";
-    fin.id = "btn-finish";
-    fin.style.cssText =
-        "padding:8px 16px;border-radius:8px;font-size:13px;font-weight:600;" +
-        "border:none;background:var(--primary,#7c5cff);color:#fff;cursor:pointer;" +
-        "display:flex;align-items:center;gap:6px;opacity:.4;pointer-events:none;";
-    fin.innerHTML = "✓ Готово <span id='point-counter' style='opacity:.75;font-size:11px;margin-left:4px'>0/10</span>";
-    fin.addEventListener("click", function (e) {
-        e.stopPropagation();
-        syncPoints();
-        if (pointCount < getMinFinishPoints()) return;
-        if (currentMode === "rectangle") {
-            if (currentHandler && typeof currentHandler._completeFromClick === "function") {
-                currentHandler._completeFromClick();
-            } else if (currentHandler && typeof currentHandler.disable === "function") {
-                currentHandler.disable();
-            }
-        } else {
-            if (currentHandler && typeof currentHandler.completeShape === "function") {
-                currentHandler.completeShape();
-            } else if (currentHandler && typeof currentHandler.disable === "function") {
-                currentHandler.disable();
-            }
-        }
-        killToolbar();
-    }, true);
-
-    drawToolbar.appendChild(cancel);
-    drawToolbar.appendChild(undo);
-    drawToolbar.appendChild(fin);
-
-    const box = document.getElementById("map-section") || document.body;
-    box.appendChild(drawToolbar);
-
-    updateUI();
-    startPolling();
+    startUIUpdater();
 }
 
-// Прямоугольник по двум кликам
+function killDrawing() {
+    stopUIUpdater();
+    if (drawToolbar) drawToolbar.style.display = "none";
+    currentHandler = null;
+    currentMode = "";
+    pointCount = 0;
+}
+
+// ==================== ПАТЧ ПРЯМОУГОЛЬНИКА ====================
 function patchRectangleTool() {
-    if (!L.Draw || !L.Draw.Rectangle || L.Draw.Rectangle.prototype._qp2) return;
-    const RP = L.Draw.Rectangle.prototype;
-    RP._qp2 = true;
+    if (L.Draw.Rectangle.prototype._fixed) return;
+    L.Draw.Rectangle.prototype._fixed = true;
 
-    const add = RP.addHooks;
-    const rem = RP.removeHooks;
+    const origAdd = L.Draw.Rectangle.prototype.addHooks;
+    L.Draw.Rectangle.prototype.addHooks = function () {
+        origAdd.call(this);
+        this._qpStart = null;
+        this._qpTempLayer = null;
 
-    RP.addHooks = function () {
-        add.call(this);
-        if (!this._map) return;
-
-        this._qpStartLatLng = null;
-        this._qpLastLatLng = null;
-        this._qpTemp = null;
-
-        this._qpClick = this._qpClick.bind(this);
-        this._qpMove = this._qpMove.bind(this);
-
-        if (this._map.dragging) this._map.dragging.disable();
-        if (this._map.doubleClickZoom) this._map.doubleClickZoom.disable();
-
-        this._map.on("click", this._qpClick, this);
-        this._map.on("mousemove", this._qpMove, this);
-        this._map.getContainer().style.cursor = "crosshair";
-
-        currentHandler = this;
-        currentMode = "rectangle";
-        createToolbar();
-    };
-
-    RP.removeHooks = function () {
-        rem.call(this);
-        if (!this._map) return;
-
-        this._map.off("click", this._qpClick, this);
-        this._map.off("mousemove", this._qpMove, this);
-
-        if (this._qpTemp) {
-            this._map.removeLayer(this._qpTemp);
-            this._qpTemp = null;
-        }
-
-        if (this._map.dragging) this._map.dragging.enable();
-        if (this._map.doubleClickZoom) this._map.doubleClickZoom.enable();
-        this._map.getContainer().style.cursor = "";
-
-        this._qpStartLatLng = null;
-        this._qpLastLatLng = null;
-    };
-
-    RP._qpClick = function (e) {
-        if (e.originalEvent && e.originalEvent.button !== 0) return;
-
-        if (!this._qpStartLatLng) {
-            this._qpStartLatLng = e.latlng;
-            const opts = (this.options && this.options.shapeOptions) || { color: "#7c5cff", fillOpacity: 0.15, weight: 2 };
-            this._qpTemp = L.rectangle([e.latlng, e.latlng], opts).addTo(this._map);
-            updateUI();
-            return;
-        }
-
-        this._qpLastLatLng = e.latlng;
-        this._completeFromClick();
-    };
-
-    RP._qpMove = function (e) {
-        if (!this._qpStartLatLng || !this._qpTemp) return;
-        this._qpLastLatLng = e.latlng;
-        this._qpTemp.setBounds(L.latLngBounds(this._qpStartLatLng, e.latlng));
-    };
-
-    RP._completeFromClick = function () {
-        if (!this._qpStartLatLng || !this._qpLastLatLng) {
+        this._onClickFixed = (e) => {
+            if (!this._qpStart) {
+                this._qpStart = e.latlng;
+                this._qpTempLayer = L.rectangle([e.latlng, e.latlng], this.options.shapeOptions).addTo(this._map);
+                currentMode = "rectangle";
+                currentHandler = this;
+                createToolbar();
+                return;
+            }
+            this._qpLast = e.latlng;
+            const bounds = L.latLngBounds(this._qpStart, this._qpLast);
+            this._map.removeLayer(this._qpTempLayer);
+            const finalRect = L.rectangle(bounds, this.options.shapeOptions);
+            this._map.fire(L.Draw.Event.CREATED, { layer: finalRect, layerType: "rectangle" });
             this.disable();
-            killToolbar();
-            return;
-        }
+            killDrawing();
+        };
 
-        const b = L.latLngBounds(this._qpStartLatLng, this._qpLastLatLng);
+        this._onMoveFixed = (e) => {
+            if (this._qpStart && this._qpTempLayer) {
+                this._qpTempLayer.setBounds(L.latLngBounds(this._qpStart, e.latlng));
+            }
+        };
 
-        if (this._qpTemp) {
-            this._map.removeLayer(this._qpTemp);
-            this._qpTemp = null;
-        }
+        this._map.on("click", this._onClickFixed);
+        this._map.on("mousemove", this._onMoveFixed);
+        this._map.getContainer().style.cursor = "crosshair";
+    };
 
-        const opts = (this.options && this.options.shapeOptions) || { color: "#7c5cff", fillOpacity: 0.15, weight: 2 };
-        const layer = L.rectangle(b, opts);
-
-        this._map.fire(L.Draw.Event.CREATED, { layer: layer, layerType: "rectangle" });
-
-        this.disable();
-        killToolbar();
+    const origRemove = L.Draw.Rectangle.prototype.removeHooks;
+    L.Draw.Rectangle.prototype.removeHooks = function () {
+        origRemove.call(this);
+        this._map.off("click", this._onClickFixed);
+        this._map.off("mousemove", this._onMoveFixed);
+        if (this._qpTempLayer) this._map.removeLayer(this._qpTempLayer);
+        this._map.getContainer().style.cursor = "";
     };
 }
-
 patchRectangleTool();
 
-// События рисования
+// ==================== ОСНОВНЫЕ СОБЫТИЯ ====================
 map.on(L.Draw.Event.DRAWSTART, function (e) {
     if (e.layerType !== "polygon" && e.layerType !== "rectangle") return;
-
     currentHandler = e.handler;
     currentMode = e.layerType;
-
-    if (currentMode === "polygon") {
-        createToolbar();
-    }
-
-    setTimeout(function () {
-        document.querySelectorAll(".leaflet-draw-actions, .leaflet-draw-edit").forEach(function (el) {
-            el.style.display = "none";
-        });
-    }, 10);
-});
-
-map.on(L.Draw.Event.DRAWVERTEX, function () {
-    if (currentMode === "polygon") {
-        updateUI();
-    }
+    createToolbar();
 });
 
 map.on(L.Draw.Event.DRAWSTOP, function () {
-    killToolbar();
-    setTimeout(function () {
-        document.querySelectorAll(".leaflet-draw-actions").forEach(function (el) {
-            el.style.display = "none";
-        });
-    }, 10);
+    killDrawing();
 });
 
-// Удаление
 map.on("draw:deleted", function () {
     drawnItems.clearLayers();
     state.bbox = null;
     state.drawnLayer = null;
-
-    try {
-        if (drawControl && drawControl._toolbars && drawControl._toolbars.edit) {
-            const tb = drawControl._toolbars.edit;
-            if (tb._activeMode && tb._activeMode.handler && typeof tb._activeMode.handler.disable === "function") {
-                tb._activeMode.handler.disable();
-            }
-            if (tb._modes) {
-                if (tb._modes.remove && tb._modes.remove.handler && typeof tb._modes.remove.handler.disable === "function") {
-                    tb._modes.remove.handler.disable();
-                }
-                if (tb._modes.edit && tb._modes.edit.handler && typeof tb._modes.edit.handler.disable === "function") {
-                    tb._modes.edit.handler.disable();
-                }
-            }
-        }
-    } catch (err) {
-        console.log(err);
-    }
-
-    if (state.heatLayer) { map.removeLayer(state.heatLayer); state.heatLayer = null; }
-    if (state.markersLayer) { map.removeLayer(state.markersLayer); state.markersLayer = null; }
-    if (state.scrapedMarkersLayer) { map.removeLayer(state.scrapedMarkersLayer); state.scrapedMarkersLayer = null; }
-
     document.getElementById("actions-panel").style.display = "none";
-    document.getElementById("report-btn").style.display = "none";
-    document.getElementById("quick-questions").style.display = "none";
-
-    addBotMessage("Область удалена. Выберите новую.");
+    addBotMessage("Область удалена. Теперь можно выбрать новую.");
 });
 
-// Редактирование
-map.on("draw:edited", function (e) {
-    const layers = e.layers;
-    if (!layers) return;
-    layers.eachLayer(function (layer) {
-        state.drawnLayer = layer;
-        const b = layer.getBounds();
-        state.bbox = b.getSouth() + "," + b.getWest() + "," + b.getNorth() + "," + b.getEast();
-    });
-    document.getElementById("actions-panel").style.display = "flex";
-    state.reportCache = null;
-});
-
-// Прячем родные кнопки
-setInterval(function () {
-    document.querySelectorAll(".leaflet-draw-actions").forEach(function (el) {
-        el.style.display = "none";
-    });
-}, 150);
-
-console.log("✅ Полигон/прямоугольник: тулбар работает по таймеру");
+console.log("✅ Туловар рисования загружен (версия 4.0 - с постоянным обновлением)");
 
 // ========== CITY INIT ==========
 function initCity() {
