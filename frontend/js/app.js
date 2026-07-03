@@ -711,6 +711,9 @@ function patchRectangleTool() {
         this._onClickFixed = function(e) {
             if (e.originalEvent && e.originalEvent.button !== 0) return;
             
+            // Если уже завершено - игнорируем клики
+            if (this._secondClickDone) return;
+            
             if (!this._qpStart) {
                 // Первый клик
                 this._qpStart = e.latlng;
@@ -727,12 +730,20 @@ function patchRectangleTool() {
                 return;
             }
             
-            // ВТОРОЙ КЛИК
+            // ВТОРОЙ КЛИК - автозавершение
             this._qpLast = e.latlng;
             this._secondClickDone = true;
             pointCount = 2;
             updateToolbarUI();
-            console.log("Rectangle: second click at", e.latlng);
+            console.log("Rectangle: second click at", e.latlng, "- auto completing");
+            
+            // Автоматически завершаем прямоугольник
+            const self = this;
+            setTimeout(function() {
+                if (self._completeFromClick) {
+                    self._completeFromClick();
+                }
+            }, 50);
         }.bind(this);
 
         // ДВИЖЕНИЕ МЫШИ (обновляем визуал, но НЕ считаем как точки)
