@@ -479,21 +479,22 @@ map.addLayer(drawnItems);
 const drawControl = new L.Control.Draw({
     draw: {
         polyline: false, circle: false, circlemarker: false, marker: false,
-        polygon: { shapeOptions: { color: "#7c5cff", fillOpacity: 0.15, weight: 2 } },
+        polygon: {
+            shapeOptions: { color: "#7c5cff", fillOpacity: 0.15, weight: 2 },
+            allowIntersection: true,
+            showArea: false,
+            drawError: {
+                color: 'transparent',
+                timeout: 1,
+                message: ''
+            }
+        },
         rectangle: { shapeOptions: { color: "#7c5cff", fillOpacity: 0.15, weight: 2 } }
     },
     edit: { featureGroup: drawnItems }
 });
 map.addControl(drawControl);
-map.on("draw:created", e => {
-    drawnItems.clearLayers();
-    drawnItems.addLayer(e.layer);
-    state.drawnLayer = e.layer;
-    const b = e.layer.getBounds();
-    state.bbox = b.getSouth() + "," + b.getWest() + "," + b.getNorth() + "," + b.getEast();
-    document.getElementById("actions-panel").style.display = "flex";
-    state.reportCache = null;
-});
+
 
 // ==================== ДОРАБОТКА РИСОВАНИЯ (ФИНАЛЬНАЯ ИСПРАВЛЕННАЯ ВЕРСИЯ) ====================
 const MAX_POINTS = 10;
@@ -506,7 +507,7 @@ let autoFinished = false;
 
 function updatePointCount() {
     if (!currentHandler) { pointCount = 0; return; }
-    
+
     if (currentMode === "polygon") {
         // Для многоугольника: считаем из _markers
         if (currentHandler._markers && Array.isArray(currentHandler._markers)) {
@@ -526,19 +527,19 @@ function updatePointCount() {
     } else {
         pointCount = 0;
     }
-    
+
     if (pointCount > MAX_POINTS) pointCount = MAX_POINTS;
 }
 
 function updateToolbarUI() {
     updatePointCount();
-    
+
     const counter = document.getElementById("point-counter");
     if (counter) {
         const maxPts = (currentMode === "rectangle") ? 2 : MAX_POINTS;
         counter.textContent = pointCount + "/" + maxPts;
     }
-    
+
     const finishBtn = document.getElementById("btn-finish");
     if (finishBtn) {
         const canFinish = pointCount >= (currentMode === "rectangle" ? 2 : 3);
@@ -546,12 +547,12 @@ function updateToolbarUI() {
         finishBtn.style.pointerEvents = canFinish ? "auto" : "none";
         finishBtn.style.cursor = canFinish ? "pointer" : "not-allowed";
     }
-    
+
     const undoBtn = document.getElementById("btn-undo");
     if (undoBtn) {
         undoBtn.style.display = (currentMode === "rectangle") ? "none" : "inline-flex";
     }
-    
+
     // Авто-завершение полигона при лимите
     if (currentMode === "polygon" && !autoFinished && pointCount >= MAX_POINTS) {
         if (currentHandler && typeof currentHandler.completeShape === "function") {
@@ -589,14 +590,14 @@ function createToolbar() {
         updateToolbarUI();
         return;
     }
-    
+
     const mapSection = document.getElementById("map-section");
     if (!mapSection) return;
-    
+
     drawToolbar = document.createElement("div");
     drawToolbar.id = "custom-draw-toolbar";
     drawToolbar.className = "draw-toolbar";
-    
+
     // Отменяем всплытие событий
     drawToolbar.addEventListener("click", function(e) {
         e.stopPropagation();
@@ -604,7 +605,7 @@ function createToolbar() {
     drawToolbar.addEventListener("mousedown", function(e) {
         e.stopPropagation();
     });
-    
+
     // КНОПКА ОТМЕНА
     const btnCancel = document.createElement("button");
     btnCancel.className = "btn-finish";
@@ -621,7 +622,7 @@ function createToolbar() {
         }
         killDrawing();
     };
-    
+
     // КНОПКА УДАЛИТЬ ТОЧКУ
     const btnUndo = document.createElement("button");
     btnUndo.id = "btn-undo";
@@ -638,7 +639,7 @@ function createToolbar() {
             }
         }
     };
-    
+
     // КНОПКА ГОТОВО
     const btnFinish = document.createElement("button");
     btnFinish.id = "btn-finish";
@@ -652,7 +653,7 @@ function createToolbar() {
             console.warn("Not enough points:", pointCount, "min:", minPts);
             return;
         }
-        
+
         if (currentMode === "rectangle" && currentHandler) {
             // Завершаем прямоугольник
             if (typeof currentHandler._completeFromClick === "function") {
@@ -669,12 +670,12 @@ function createToolbar() {
             }
         }
     };
-    
+
     drawToolbar.appendChild(btnCancel);
     drawToolbar.appendChild(btnUndo);
     drawToolbar.appendChild(btnFinish);
     mapSection.appendChild(drawToolbar);
-    
+
     startUIUpdater();
     updateToolbarUI();
 }
@@ -697,7 +698,7 @@ function patchRectangleTool() {
 
     L.Draw.Rectangle.prototype.addHooks = function() {
         if (!this._map) return;
-        
+
         this._map.dragging.disable();
         this._map.doubleClickZoom.disable();
         this._map.getContainer().style.cursor = "crosshair";
@@ -710,40 +711,51 @@ function patchRectangleTool() {
         // ПЕРВЫЙ КЛИК
         this._onClickFixed = function(e) {
             if (e.originalEvent && e.originalEvent.button !== 0) return;
-            
+
             // Если уже завершено - игнорируем клики
             if (this._secondClickDone) return;
-            
+
             if (!this._qpStart) {
                 // Первый клик
                 this._qpStart = e.latlng;
                 this._qpTempLayer = L.rectangle([e.latlng, e.latlng], this.options.shapeOptions).addTo(this._map);
-                
+
                 currentMode = "rectangle";
                 currentHandler = this;
                 pointCount = 1;
                 autoFinished = false;
-                
+
                 createToolbar();
                 updateToolbarUI();
                 console.log("Rectangle: first click at", e.latlng);
                 return;
             }
-            
-            // ВТОРОЙ КЛИК - автозавершение
+
+            // ВТОРОЙ КЛИК - жёсткое автозавершение
             this._qpLast = e.latlng;
             this._secondClickDone = true;
             pointCount = 2;
+            
+            // Фиксируем финальные границы СРАЗУ
+            if (this._qpTempLayer) {
+                this._qpTempLayer.setBounds(L.latLngBounds(this._qpStart, this._qpLast));
+            }
+            
+            // Отключаем mousemove, чтобы не съезжало
+            if (this._onMoveFixed) {
+                this._map.off("mousemove", this._onMoveFixed);
+            }
+            
             updateToolbarUI();
             console.log("Rectangle: second click at", e.latlng, "- auto completing");
             
-            // Автоматически завершаем прямоугольник
+            // Немедленно завершаем
             const self = this;
             setTimeout(function() {
                 if (self._completeFromClick) {
                     self._completeFromClick();
                 }
-            }, 50);
+            }, 10);
         }.bind(this);
 
         // ДВИЖЕНИЕ МЫШИ (обновляем визуал, но НЕ считаем как точки)
@@ -759,11 +771,11 @@ function patchRectangleTool() {
                 console.warn("Rectangle incomplete");
                 return;
             }
-            
+
             const bounds = L.latLngBounds(this._qpStart, this._qpLast);
             this._map.removeLayer(this._qpTempLayer);
             this._qpTempLayer = null;
-            
+
             const finalRect = L.rectangle(bounds, this.options.shapeOptions);
             this._map.fire(L.Draw.Event.CREATED, { layer: finalRect, layerType: "rectangle" });
             this.disable();
@@ -775,16 +787,16 @@ function patchRectangleTool() {
 
     L.Draw.Rectangle.prototype.removeHooks = function() {
         if (!this._map) return;
-        
+
         this._map.dragging.enable();
         this._map.doubleClickZoom.enable();
         this._map.off("click", this._onClickFixed);
         this._map.off("mousemove", this._onMoveFixed);
-        
+
         if (this._qpTempLayer) {
             this._map.removeLayer(this._qpTempLayer);
         }
-        
+
         this._map.getContainer().style.cursor = "";
         this._qpStart = null;
         this._qpTempLayer = null;
@@ -797,7 +809,7 @@ patchRectangleTool();
 // ==================== СОБЫТИЯ РИСОВАНИЯ ====================
 map.on('draw:drawstart', function(e) {
     console.log("DRAW:DRAWSTART", e.layerType);
-    
+
     if (e.layerType !== "polygon" && e.layerType !== "rectangle") return;
 
     // Чистим старые области
@@ -850,13 +862,13 @@ map.on("draw:created", function(e) {
     drawnItems.clearLayers();
     drawnItems.addLayer(e.layer);
     state.drawnLayer = e.layer;
-    
+
     const b = e.layer.getBounds();
     state.bbox = b.getSouth() + "," + b.getWest() + "," + b.getNorth() + "," + b.getEast();
-    
+
     document.getElementById("actions-panel").style.display = "flex";
     state.reportCache = null;
-    
+
     killDrawing();
 });
 
@@ -876,13 +888,13 @@ map.on("draw:edited", function(e) {
     console.log("DRAW:EDITED");
     const layers = e.layers && e.layers.getLayers ? e.layers.getLayers() : [];
     if (!layers.length) return;
-    
+
     const layer = layers[0];
     state.drawnLayer = layer;
-    
+
     const b = layer.getBounds();
     state.bbox = b.getSouth() + "," + b.getWest() + "," + b.getNorth() + "," + b.getEast();
-    
+
     document.getElementById("actions-panel").style.display = "flex";
     state.reportCache = null;
 });
