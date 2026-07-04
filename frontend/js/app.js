@@ -1958,4 +1958,3 @@ setTimeout(() => {
     initCity();
     lucide.createIcons();
 }, 100);
-
