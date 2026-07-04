@@ -53,7 +53,7 @@ def reverse_geocode(lat, lon):
         r = requests.get(
             "https://nominatim.openstreetmap.org/reverse",
             params={"lat": lat, "lon": lon, "format": "json", "accept-language": "ru", "zoom": 10},
-            headers={"User-Agent": "QuarterPortrait/1.0"}, timeout=8
+            headers={"User-Agent": "QuarterPortrait/1.0"}, timeout=5
         )
         if r.status_code == 200:
             addr = r.json().get("address", {})
@@ -133,7 +133,7 @@ async def start_scrape(req: ScrapeRequest):
 
     response = requests.post(
         "https://api.apify.com/v2/acts/" + ACTOR_ID + "/runs",
-        params={"token": APIFY_TOKEN}, json=actor_input, timeout=35
+        params={"token": APIFY_TOKEN}, json=actor_input, timeout=15
     )
     if response.status_code not in (200, 201):
         raise HTTPException(status_code=500, detail="Apify: " + response.text[:300])
