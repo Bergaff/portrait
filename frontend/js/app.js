@@ -143,14 +143,22 @@ function updateAuthUILoggedOut() {
 function updateChatInputState() {
     const chatInput = document.getElementById("chat-input");
     const sendBtn = document.getElementById("send-btn");
-
     if (!chatInput) return;
-
-    if (!currentUser) {
+    
+    // Ввод разрешен ТОЛЬКО если есть юзер И он PRO
+    if (isUserPro()) {
         chatInput.disabled = false;
         chatInput.placeholder = "Спросите про район...";
         if (sendBtn) sendBtn.disabled = false;
-    } else if (isUserPro()) {
+    } else {
+        // Для всех остальных (неавторизованных и Free) поле заблокировано
+        chatInput.disabled = true;
+        chatInput.placeholder = "🔒 Ввод текста доступен в PRO. Жмите кнопки!";
+        if (sendBtn) sendBtn.disabled = true;
+    }
+}
+
+ {
         chatInput.disabled = false;
         chatInput.placeholder = "Спросите про район...";
         if (sendBtn) sendBtn.disabled = false;
@@ -243,7 +251,7 @@ async function emailSignIn() {
     const p = document.getElementById("auth-password").value;
     if (!e || !p) { showAuthError("Заполните поля"); return; }
 
-    if (REQUIRE_RU_EMAIL && !isRussianEmail(e)) {
+    if (REQUIRE_RU_EMAIL === true && !isRussianEmail(e)) {
         showAuthError("Согласно ФЗ №405, регистрация возможна только через российскую почту (.ru, .su, .рф)");
         return;
     }
@@ -258,7 +266,7 @@ async function emailSignUp() {
     if (!e || !p) { showAuthError("Заполните поля"); return; }
     if (p.length < 6) { showAuthError("Минимум 6 символов"); return; }
 
-    if (REQUIRE_RU_EMAIL && !isRussianEmail(e)) {
+    if (REQUIRE_RU_EMAIL === true && !isRussianEmail(e)) {
         showAuthError("Согласно ФЗ №405, регистрация возможна только через российскую почту (.ru, .su, .рф)");
         return;
     }
@@ -1021,26 +1029,39 @@ let searchTimeout;
 document.getElementById("search-input").addEventListener("input", e => {
     clearTimeout(searchTimeout);
     const q = e.target.value.trim();
-    if (q.length < 2) { document.getElementById("search-results").innerHTML = ""; return; }
+    const resultsContainer = document.getElementById("search-results");
+    
+    if (q.length < 2) { 
+        resultsContainer.innerHTML = ""; 
+        return; 
+    }
+    
     searchTimeout = setTimeout(async () => {
         try {
             const r = await fetch("/api/search?q=" + encodeURIComponent(q));
+            if (!r.ok) return;
             const d = await r.json();
-            const c = document.getElementById("search-results");
-            c.innerHTML = "";
-            if (!d.results?.length) { c.innerHTML = '<div class="search-item">Не найдено</div>'; return; }
+            
+            resultsContainer.innerHTML = "";
+            if (!d.results || !d.results.length) { 
+                resultsContainer.innerHTML = '<div class="search-item">Не найдено</div>'; 
+                return; 
+            }
+            
             d.results.forEach(item => {
                 const div = document.createElement("div");
                 div.className = "search-item";
                 div.textContent = item.display_name.substring(0, 70);
                 div.onclick = () => {
                     map.setView([item.lat, item.lon], 16);
-                    c.innerHTML = "";
+                    resultsContainer.innerHTML = "";
                     document.getElementById("search-input").value = item.display_name.substring(0, 50);
                 };
-                c.appendChild(div);
+                resultsContainer.appendChild(div);
             });
-        } catch (e) {}
+        } catch (e) {
+            console.error("Ошибка поиска:", e);
+        }
     }, 400);
 });
 
