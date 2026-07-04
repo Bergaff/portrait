@@ -42,6 +42,14 @@ body[data-theme="light"] {
     --sidebar: oklch(0.945 0.006 260);
 }
 
+
+#mobile-panel-btn { display: none; }
+#mobile-overlay { display: none; }
+@media (max-width: 920px) {
+    #mobile-panel-btn { display: flex; }
+}
+
+
 /* Скрываем флаг OSM attribution */
 .leaflet-attribution-flag,
 .leaflet-control-attribution svg {
@@ -212,6 +220,13 @@ body {
 #theme-toggle .icon-light { display: none; }
 body[data-theme="light"] #theme-toggle .icon-dark { display: none; }
 body[data-theme="light"] #theme-toggle .icon-light { display: block; }
+
+
+
+<button id="mobile-panel-btn">
+<i data-lucide="menu"></i>
+</button>
+
 
 #user-info { display: flex; align-items: center; gap: 10px; }
 #profile-trigger {
@@ -718,3 +733,123 @@ body[data-theme="light"] #chat-messages .msg-user {
     color: var(--muted-fg);
     font-size: 13px;
 }
+
+
+
+/* ==================== MOBILE ADAPTATION ==================== */
+@media (max-width: 920px) {
+    #rail { display: none; }
+    #sidebar { display: none !important; }
+    
+    #header {
+        padding: 0 12px;
+    }
+    
+    .header-title {
+        font-size: 15px;
+    }
+    
+    #workspace {
+        flex-direction: column;
+        height: calc(100vh - 56px);
+    }
+    
+    #map-section {
+        flex: 1;
+        border: none;
+        position: relative;
+    }
+    
+    /* Кнопка открытия панели (справа сверху) */
+    #mobile-panel-btn {
+        position: absolute;
+        top: 68px;
+        right: 14px;
+        z-index: 1000;
+        width: 48px;
+        height: 48px;
+        border-radius: 50%;
+        background: var(--primary);
+        color: white;
+        border: none;
+        box-shadow: 0 4px 15px rgba(124, 92, 255, 0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 22px;
+        cursor: pointer;
+    }
+    
+    /* Оверлей-панель */
+    #mobile-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.88);
+        z-index: 1100;
+        display: none;
+        align-items: flex-end;
+    }
+    
+    #mobile-overlay.active {
+        display: flex;
+    }
+    
+    #mobile-content {
+        width: 100%;
+        max-height: 92%;
+        background: var(--card);
+        border-top-left-radius: 20px;
+        border-top-right-radius: 20px;
+        display: flex;
+        flex-direction: column;
+        box-shadow: 0 -10px 40px rgba(0,0,0,0.6);
+        overflow: hidden;
+    }
+    
+    #mobile-header {
+        padding: 14px 20px;
+        border-bottom: 1px solid var(--border);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 16px;
+        font-weight: 600;
+        flex-shrink: 0;
+    }
+    
+    #mobile-close {
+        font-size: 32px;
+        width: 44px;
+        height: 44px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--muted-fg);
+        cursor: pointer;
+        line-height: 1;
+    }
+    
+    #mobile-body {
+        flex: 1;
+        overflow-y: auto;
+        padding: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+    }
+    
+    #scores-panel, #actions-panel, #quick-questions, #chat-section {
+        width: 100%;
+    }
+    
+    #chat-section {
+        flex: 1;
+        min-height: 400px;
+    }
+}
+
+
+
+
+
+
