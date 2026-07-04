@@ -30,3 +30,22 @@ async def chat_answer(req: ChatRequest):
         return {"answer": result}
     except Exception as e:
         return {"answer": "Ошибка: " + str(e)[:200]}
+
+@router.get("/debug/nvidia")
+async def debug_nvidia():
+    key = __import__("os").environ.get("NVIDIA_API_KEY", "")
+    result = {
+        "key_present": bool(key),
+        "key_length": len(key) if key else 0,
+        "key_preview": (key[:8] + "...") if key else "MISSING"
+    }
+    if key:
+        try:
+            test = ask_nvidia("Ответь одним словом: тест", max_tokens=20)
+            result["test_response"] = test
+        except Exception as e:
+            result["error"] = str(e)[:300]
+    return result
+
+
+
