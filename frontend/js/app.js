@@ -5,7 +5,7 @@ const APP_VERSION = "1.0";
 
 
 // Настройка: принудительная регистрация только с почтами РФ (.ru, .su, .рф, Yandex, Mail.ru и др.)
-const REQUIRE_RU_EMAIL = true; // Поставь false, чтобы отключить ограничение
+const REQUIRE_RU_EMAIL = false; // Поставь false, чтобы отключить ограничение
 
 function isRussianEmail(email) {
     if (!email || !email.includes("@")) return false;
@@ -13,6 +13,18 @@ function isRussianEmail(email) {
     const ruTLDs = [".ru", ".su", ".рф"];
     const ruDomains = ["yandex.ru", "mail.ru", "bk.ru", "inbox.ru", "list.ru", "rambler.ru", "ya.ru", "vk.com"];
     return ruTLDs.some(tld => domain.endsWith(tld)) || ruDomains.includes(domain);
+}
+
+
+
+async function safeJson(response) {
+    const text = await response.text();
+    try {
+        return JSON.parse(text);
+    } catch (e) {
+        console.error("Non-JSON response:", text.substring(0, 300));
+        throw new Error("Сервер перегружен или временно недоступен, попробуйте ещё раз");
+    }
 }
 
 
@@ -131,9 +143,9 @@ function updateAuthUILoggedOut() {
 function updateChatInputState() {
     const chatInput = document.getElementById("chat-input");
     const sendBtn = document.getElementById("send-btn");
-    
+
     if (!chatInput) return;
-    
+
     if (!currentUser) {
         chatInput.disabled = false;
         chatInput.placeholder = "Спросите про район...";
@@ -230,12 +242,12 @@ async function emailSignIn() {
     const e = document.getElementById("auth-email").value.trim();
     const p = document.getElementById("auth-password").value;
     if (!e || !p) { showAuthError("Заполните поля"); return; }
-    
+
     if (REQUIRE_RU_EMAIL && !isRussianEmail(e)) {
         showAuthError("Согласно ФЗ №405, регистрация возможна только через российскую почту (.ru, .su, .рф)");
         return;
     }
-    
+
     const { error } = await supabaseClient.auth.signInWithPassword({ email: e, password: p });
     if (error) showAuthError(translateError(error.message));
 }
@@ -245,12 +257,12 @@ async function emailSignUp() {
     const p = document.getElementById("auth-password").value;
     if (!e || !p) { showAuthError("Заполните поля"); return; }
     if (p.length < 6) { showAuthError("Минимум 6 символов"); return; }
-    
+
     if (REQUIRE_RU_EMAIL && !isRussianEmail(e)) {
         showAuthError("Согласно ФЗ №405, регистрация возможна только через российскую почту (.ru, .su, .рф)");
         return;
     }
-    
+
     const { error } = await supabaseClient.auth.signUp({ email: e, password: p });
     if (error) showAuthError(translateError(error.message));
     else showAuthError("✓ Проверьте почту");
@@ -1199,22 +1211,22 @@ function renderFilteredMarkers() {
     state.markersLayer = L.layerGroup();
     state.organizations.forEach(o => {
         if (!isInsideDrawn(o.lat, o.lon)) return;
-        
+
         const poiCategory = getAmenityCategoryName(o.amenity);
-        
+
         if (state.activeFilter && state.activeFilter !== "Разнообразие") {
             if (!(CAT_MAP[state.activeFilter] || []).includes(o.amenity)) return;
         }
-        
+
         // Каждая категория окрашивается в свой цвет из CAT_COLORS
         const color = CAT_COLORS[poiCategory] || "#7c5cff";
-        
-        L.circleMarker([o.lat, o.lon], { 
-            radius: 5, 
-            color: "#ffffff", 
-            fillColor: color, 
-            fillOpacity: 0.9, 
-            weight: 1 
+
+        L.circleMarker([o.lat, o.lon], {
+            radius: 5,
+            color: "#ffffff",
+            fillColor: color,
+            fillOpacity: 0.9,
+            weight: 1
         }).bindTooltip("<b>" + o.name + "</b><br><span style='color:" + color + "'>●</span> " + poiCategory, { direction: "top" }).addTo(state.markersLayer);
     });
     state.markersLayer.addTo(map);
@@ -1246,23 +1258,34 @@ function isInsideDrawn(lat, lon) {
 function showScores(s) {
     const panel = document.getElementById("scores-panel");
     panel.style.display = "flex";
-    let html = '<div class="score-card score-overall">';
+
+    const dLevel = (s.poi_density || 0);
+    let dLabel = "Низкая";
+    if (dLevel > 150) dLabel = "Очень высокая";
+    else if (dLevel > 80) dLabel = "Высокая";
+    else if (dLevel > 30) dLabel = "Средняя";
+
+    let html = '<div class="score-card score-overall combined-card">';
+    html += '<div class="combined-grid">';
+
+    html += '<div class="combined-col">';
     html += '<div class="score-label">Индекс района</div>';
     html += '<div class="score-big">' + s.overall + '/100</div>';
     html += '<div class="score-sub">' + s.total_places + ' мест · ' + s.area_km2 + ' км²</div>';
     html += '</div>';
-    html += '<div class="score-card density-card">';
+
+    html += '<div class="combined-divider"></div>';
+
+    html += '<div class="combined-col">';
     html += '<div class="score-label">Плотность POI</div>';
-    html += '<div style="display:flex;justify-content:space-between;align-items:flex-end;margin-top:4px">';
-    html += '<div><div class="score-big" style="font-size:24px">' + (s.poi_density || 0) + '</div>';
-    html += '<div class="score-sub">мест на км²</div></div>';
-    const dLevel = (s.poi_density || 0);
-    let dLabel = "Низкая", dColor = "var(--muted-fg)";
-    if (dLevel > 150) { dLabel = "Очень высокая"; dColor = "var(--primary)"; }
-    else if (dLevel > 80) { dLabel = "Высокая"; dColor = "var(--success)"; }
-    else if (dLevel > 30) { dLabel = "Средняя"; dColor = "var(--warning)"; }
-    html += '<div style="color:' + dColor + ';font-size:12px;font-weight:600">' + dLabel + '</div>';
+    html += '<div class="score-big" style="font-size:24px">' + dLevel + '</div>';
+    html += '<div class="score-sub">мест/км² · ' + dLabel + '</div>';
+    html += '<button class="btn-density-details" onclick="toggleDensityDetails(event)">Подробнее ▾</button>';
+    html += '<div id="density-details-popup" class="density-details-popup"></div>';
+    html += '</div>';
+
     html += '</div></div>';
+
     if (s.avg_rating) {
         html += '<div class="score-card">';
         html += '<div class="score-label">Средний рейтинг</div>';
@@ -1270,6 +1293,7 @@ function showScores(s) {
         html += '<div class="score-sub">по данным Яндекс.Карт</div>';
         html += '</div>';
     }
+
     const metrics = [
         { label: "Еда", value: s.food }, { label: "Здоровье", value: s.health },
         { label: "Шопинг", value: s.shopping }, { label: "Спорт", value: s.sport },
@@ -1290,6 +1314,42 @@ function showScores(s) {
     panel.innerHTML = html;
 }
 
+function toggleDensityDetails(event) {
+    if (event) event.stopPropagation();
+    const popup = document.getElementById("density-details-popup");
+    if (!popup) return;
+
+    if (popup.style.display === "block") {
+        popup.style.display = "none";
+        return;
+    }
+
+    const area = (state.scores && state.scores.area_km2) || 1;
+    const cats = state.categories || {};
+    const entries = Object.entries(cats).sort((a, b) => b[1] - a[1]);
+
+    let html = '<div class="density-popup-title">Плотность по категориям</div>';
+    if (entries.length === 0) {
+        html += '<div class="density-popup-empty">Нет данных</div>';
+    } else {
+        entries.forEach(([name, count]) => {
+            const density = Math.round((count / area) * 10) / 10;
+            html += '<div class="density-popup-row"><span>' + name + '</span>' +
+                '<span class="density-popup-value">' + density + '/км² <small>(' + count + ')</small></span></div>';
+        });
+    }
+    popup.innerHTML = html;
+    popup.style.display = "block";
+}
+
+document.addEventListener("click", (e) => {
+    const popup = document.getElementById("density-details-popup");
+    if (popup && popup.style.display === "block" &&
+        !e.target.closest("#density-details-popup") && !e.target.closest(".btn-density-details")) {
+        popup.style.display = "none";
+    }
+});
+
 // ========== REPORT ==========
 async function generateReport() {
     const btn = document.getElementById("report-btn");
@@ -1305,7 +1365,7 @@ async function generateReport() {
     trackRequest();
     try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 95000);
+        const timeoutId = setTimeout(() => controller.abort(), 75000);
         const r = await fetch("/api/report", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -1322,7 +1382,9 @@ async function generateReport() {
             addBotMessage("✗ Ошибка " + r.status + ": " + txt.substring(0, 200));
             return;
         }
-        const data = await r.json();
+        let data;
+        try { data = await safeJson(r); }
+        catch (jsonErr) { addBotMessage("✗ " + jsonErr.message); return; }
         if (!data.report) { addBotMessage("✗ Пустой ответ"); return; }
         state.reportCache = data.report;
         document.getElementById("report-text").innerHTML = markdownToHtml(data.report);
@@ -1570,7 +1632,9 @@ async function runProAnalysis(categories, enrichData) {
                 enrich_data: enrichData
             })
         });
-        const d = await r.json();
+        let d;
+        try { d = await safeJson(r); }
+        catch (jsonErr) { addBotMessage("✗ " + jsonErr.message); return; }
         if (!d.run_id) { addBotMessage("✗ Ошибка: " + (d.detail || "unknown")); return; }
         if (d.from_cache) addBotMessage("⚡ Из кеша (" + (d.cache_age_min || 0) + " мин)");
         state.scrapeRunId = d.run_id;
@@ -1596,7 +1660,9 @@ function pollProAnalyze(runId) {
         if (attempts > max) { clearInterval(scrapingPollInterval); addBotMessage("⏱ Таймаут"); return; }
         try {
             const r = await fetch("/api/scrape/status/" + runId);
-            const d = await r.json();
+            let d;
+            try { d = await safeJson(r); }
+            catch (jsonErr) { clearInterval(scrapingPollInterval); addBotMessage("✗ " + jsonErr.message); return; }
             if (d.status === "SUCCEEDED") {
                 clearInterval(scrapingPollInterval);
                 processApifyResults(d.data || [], d.from_cache);
@@ -1674,7 +1740,7 @@ function setChatBusy(b) {
 
 function checkGuestActionAllowed() {
     if (currentUser) return true; // Авторизованные проходят лимит анонима
-    
+
     let guestRequests = parseInt(localStorage.getItem("qp_guest_requests") || "0");
     if (guestRequests >= 3) {
         addBotMessage("🔒 Вы исчерпали 3 бесплатные попытки без регистрации. Войдите или зарегистрируйтесь, чтобы продолжить!");
@@ -1690,7 +1756,7 @@ function togglePasswordVisibility() {
     const pwInput = document.getElementById("auth-password");
     const eyeIcon = document.getElementById("pw-eye-icon");
     if (!pwInput) return;
-    
+
     if (pwInput.type === "password") {
         pwInput.type = "text";
         if (eyeIcon) eyeIcon.setAttribute("data-lucide", "eye-off");
@@ -1708,21 +1774,21 @@ function togglePasswordVisibility() {
 
 async function sendMessage() {
     if (state.chatBusy) return;
-    
+
     if (!currentUser && !checkGuestActionAllowed()) return;
-    
+
     if (currentUser && !isUserPro()) {
         addBotMessage("🔒 Произвольный ввод вопросов AI доступен только в PRO-версии. Вы можете нажимать быстрые кнопки выше!");
         return;
     }
-    
+
     const i = document.getElementById("chat-input"), t = i.value.trim();
     if (!t) return;
     // ... далее текущий код sendMessage() без изменений
     i.value = ""; setChatBusy(true); addUserMessage(t); addLoading(); trackRequest();
     try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 95000);
+        const timeoutId = setTimeout(() => controller.abort(), 75000);
         const r = await fetch("/api/chat", {
             method: "POST", headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -1734,7 +1800,9 @@ async function sendMessage() {
             signal: controller.signal
         });
         clearTimeout(timeoutId);
-        const d = await r.json();
+        let d;
+        try { d = await safeJson(r); }
+        catch (jsonErr) { removeLoading(); addBotMessage("✗ " + jsonErr.message); return; }
         removeLoading();
         addBotMessage(d.answer || "Пустой ответ");
     } catch (e) {
@@ -1751,7 +1819,7 @@ async function askQuick(q) {
     setChatBusy(true); addUserMessage(q); addLoading(); trackRequest();
     try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 95000);
+        const timeoutId = setTimeout(() => controller.abort(), 75000);
         const r = await fetch("/api/chat", {
             method: "POST", headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -1763,7 +1831,9 @@ async function askQuick(q) {
             signal: controller.signal
         });
         clearTimeout(timeoutId);
-        const d = await r.json();
+        let d;
+        try { d = await safeJson(r); }
+        catch (jsonErr) { removeLoading(); addBotMessage("✗ " + jsonErr.message); return; }
         removeLoading();
         addBotMessage(d.answer || "Пустой ответ");
     } catch (e) {
@@ -1852,7 +1922,7 @@ if (mobileContent) {
     mobileContent.addEventListener("touchstart", (e) => {
         touchStartY = e.touches[0].clientY;
     }, {passive: true});
-    
+
     mobileContent.addEventListener("touchmove", (e) => {
         if (mobileBody.scrollTop > 0) return;
         const diff = e.touches[0].clientY - touchStartY;
