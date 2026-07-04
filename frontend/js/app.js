@@ -735,20 +735,20 @@ function patchRectangleTool() {
             this._qpLast = e.latlng;
             this._secondClickDone = true;
             pointCount = 2;
-            
+
             // Фиксируем финальные границы СРАЗУ
             if (this._qpTempLayer) {
                 this._qpTempLayer.setBounds(L.latLngBounds(this._qpStart, this._qpLast));
             }
-            
+
             // Отключаем mousemove, чтобы не съезжало
             if (this._onMoveFixed) {
                 this._map.off("mousemove", this._onMoveFixed);
             }
-            
+
             updateToolbarUI();
             console.log("Rectangle: second click at", e.latlng, "- auto completing");
-            
+
             // Немедленно завершаем
             const self = this;
             setTimeout(function() {
@@ -1665,8 +1665,98 @@ function markdownToHtml(t) {
             .replace(/\n/g, "<br>");
 }
 
+// ==================== MOBILE PANEL ====================
+const mobilePanelBtn = document.getElementById("mobile-panel-btn");
+const mobileOverlay = document.getElementById("mobile-overlay");
+const mobileClose = document.getElementById("mobile-close");
+const mobileBody = document.getElementById("mobile-body");
+const mobileContent = document.getElementById("mobile-content");
+
+// Элементы, которые перемещаем между sidebar и mobile
+const movableIds = ["scores-panel", "actions-panel", "quick-questions", "chat-section"];
+
+function isMobile() {
+    return window.innerWidth <= 920 || ('ontouchstart' in window && window.innerWidth < 1024);
+}
+
+function moveToMobile() {
+    movableIds.forEach(id => {
+        const el = document.getElementById(id);
+        if (el && sidebar.contains(el)) {
+            mobileBody.appendChild(el);
+        }
+    });
+}
+
+function moveBackToSidebar() {
+    movableIds.forEach(id => {
+        const el = document.getElementById(id);
+        if (el && mobileBody.contains(el)) {
+            sidebar.appendChild(el);
+        }
+    });
+}
+
+function openMobilePanel() {
+    if (!isMobile()) return;
+    moveToMobile();
+    mobileOverlay.classList.add("active");
+    document.body.style.overflow = "hidden";
+    lucide.createIcons();
+}
+
+function closeMobilePanel() {
+    mobileOverlay.classList.remove("active");
+    document.body.style.overflow = "";
+    setTimeout(moveBackToSidebar, 300);
+}
+
+// Обработчики
+if (mobilePanelBtn) {
+    mobilePanelBtn.addEventListener("click", openMobilePanel);
+}
+
+if (mobileClose) {
+    mobileClose.addEventListener("click", closeMobilePanel);
+}
+
+if (mobileOverlay) {
+    mobileOverlay.addEventListener("click", (e) => {
+        if (e.target === mobileOverlay) closeMobilePanel();
+    });
+}
+
+// Свайп вниз для закрытия
+let touchStartY = 0;
+if (mobileContent) {
+    mobileContent.addEventListener("touchstart", (e) => {
+        touchStartY = e.touches[0].clientY;
+    }, {passive: true});
+    
+    mobileContent.addEventListener("touchmove", (e) => {
+        if (mobileBody.scrollTop > 0) return;
+        const diff = e.touches[0].clientY - touchStartY;
+        if (diff > 80) closeMobilePanel();
+    }, {passive: true});
+}
+
+// Escape для закрытия
+document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && mobileOverlay?.classList.contains("active")) {
+        closeMobilePanel();
+    }
+});
+
+// При ресайзе на десктоп возвращаем всё назад
+window.addEventListener("resize", () => {
+    if (!isMobile() && mobileOverlay?.classList.contains("active")) {
+        closeMobilePanel();
+    }
+});
+
 // Запуск инициализации города
 setTimeout(() => {
     initCity();
     lucide.createIcons();
 }, 100);
+
