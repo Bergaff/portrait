@@ -2,6 +2,21 @@
 
 const APP_VERSION = "1.0";
 
+
+
+// Настройка: принудительная регистрация только с почтами РФ (.ru, .su, .рф, Yandex, Mail.ru и др.)
+const REQUIRE_RU_EMAIL = true; // Поставь false, чтобы отключить ограничение
+
+function isRussianEmail(email) {
+    if (!email || !email.includes("@")) return false;
+    const domain = email.split("@")[1].toLowerCase();
+    const ruTLDs = [".ru", ".su", ".рф"];
+    const ruDomains = ["yandex.ru", "mail.ru", "bk.ru", "inbox.ru", "list.ru", "rambler.ru", "ya.ru", "vk.com"];
+    return ruTLDs.some(tld => domain.endsWith(tld)) || ruDomains.includes(domain);
+}
+
+
+
 // ========== CITY ==========
 let detectedCity = "", detectedLat = 55.7558, detectedLon = 37.6173;
 let cityInitTimeout = null;
@@ -97,13 +112,42 @@ supabaseClient.auth.onAuthStateChange((event, session) => {
 });
 initAuth();
 
+function isUserPro() {
+    return currentUser && (localStorage.getItem("is_pro_" + currentUser.id) === "1");
+}
+
 function updateAuthUI() {
     document.getElementById("auth-btn").style.display = "none";
     document.getElementById("user-info").style.display = "flex";
+    updateChatInputState();
 }
+
 function updateAuthUILoggedOut() {
     document.getElementById("auth-btn").style.display = "inline-flex";
     document.getElementById("user-info").style.display = "none";
+    updateChatInputState();
+}
+
+function updateChatInputState() {
+    const chatInput = document.getElementById("chat-input");
+    const sendBtn = document.getElementById("send-btn");
+    
+    if (!chatInput) return;
+    
+    if (!currentUser) {
+        chatInput.disabled = false;
+        chatInput.placeholder = "Спросите про район...";
+        if (sendBtn) sendBtn.disabled = false;
+    } else if (isUserPro()) {
+        chatInput.disabled = false;
+        chatInput.placeholder = "Спросите про район...";
+        if (sendBtn) sendBtn.disabled = false;
+    } else {
+        // Зарегистрированный, но FREE юзер - не может свободно писать
+        chatInput.disabled = true;
+        chatInput.placeholder = "🔒 Произвольный ввод доступен в PRO. Используйте кнопки выше!";
+        if (sendBtn) sendBtn.disabled = true;
+    }
 }
 async function socialLogin(provider) {
     showAuthError("Открываем " + provider + "...");
@@ -186,14 +230,27 @@ async function emailSignIn() {
     const e = document.getElementById("auth-email").value.trim();
     const p = document.getElementById("auth-password").value;
     if (!e || !p) { showAuthError("Заполните поля"); return; }
+    
+    if (REQUIRE_RU_EMAIL && !isRussianEmail(e)) {
+        showAuthError("Согласно ФЗ №405, регистрация возможна только через российскую почту (.ru, .su, .рф)");
+        return;
+    }
+    
     const { error } = await supabaseClient.auth.signInWithPassword({ email: e, password: p });
     if (error) showAuthError(translateError(error.message));
 }
+
 async function emailSignUp() {
     const e = document.getElementById("auth-email").value.trim();
     const p = document.getElementById("auth-password").value;
     if (!e || !p) { showAuthError("Заполните поля"); return; }
     if (p.length < 6) { showAuthError("Минимум 6 символов"); return; }
+    
+    if (REQUIRE_RU_EMAIL && !isRussianEmail(e)) {
+        showAuthError("Согласно ФЗ №405, регистрация возможна только через российскую почту (.ru, .su, .рф)");
+        return;
+    }
+    
     const { error } = await supabaseClient.auth.signUp({ email: e, password: p });
     if (error) showAuthError(translateError(error.message));
     else showAuthError("✓ Проверьте почту");
@@ -1130,17 +1187,35 @@ function toggleFilter(c) {
     showScores(state.scores);
 }
 
+function getAmenityCategoryName(amenity) {
+    for (const [catName, list] of Object.entries(CAT_MAP)) {
+        if (list.includes(amenity)) return catName;
+    }
+    return "Другое";
+}
+
 function renderFilteredMarkers() {
     if (state.markersLayer) map.removeLayer(state.markersLayer);
     state.markersLayer = L.layerGroup();
     state.organizations.forEach(o => {
         if (!isInsideDrawn(o.lat, o.lon)) return;
+        
+        const poiCategory = getAmenityCategoryName(o.amenity);
+        
         if (state.activeFilter && state.activeFilter !== "Разнообразие") {
             if (!(CAT_MAP[state.activeFilter] || []).includes(o.amenity)) return;
         }
-        const color = state.activeFilter ? (CAT_COLORS[state.activeFilter] || "#7c5cff") : "#7c5cff";
-        L.circleMarker([o.lat, o.lon], { radius: 5, color, fillColor: color, fillOpacity: 0.85, weight: 1 })
-            .bindTooltip(o.name + " (" + o.amenity + ")").addTo(state.markersLayer);
+        
+        // Каждая категория окрашивается в свой цвет из CAT_COLORS
+        const color = CAT_COLORS[poiCategory] || "#7c5cff";
+        
+        L.circleMarker([o.lat, o.lon], { 
+            radius: 5, 
+            color: "#ffffff", 
+            fillColor: color, 
+            fillOpacity: 0.9, 
+            weight: 1 
+        }).bindTooltip("<b>" + o.name + "</b><br><span style='color:" + color + "'>●</span> " + poiCategory, { direction: "top" }).addTo(state.markersLayer);
     });
     state.markersLayer.addTo(map);
 }
@@ -1596,10 +1671,54 @@ function setChatBusy(b) {
     const s = document.getElementById("send-btn"); if (s) s.disabled = b;
 }
 
+
+function checkGuestActionAllowed() {
+    if (currentUser) return true; // Авторизованные проходят лимит анонима
+    
+    let guestRequests = parseInt(localStorage.getItem("qp_guest_requests") || "0");
+    if (guestRequests >= 3) {
+        addBotMessage("🔒 Вы исчерпали 3 бесплатные попытки без регистрации. Войдите или зарегистрируйтесь, чтобы продолжить!");
+        toggleAuth();
+        return false;
+    }
+    guestRequests++;
+    localStorage.setItem("qp_guest_requests", guestRequests.toString());
+    return true;
+}
+
+function togglePasswordVisibility() {
+    const pwInput = document.getElementById("auth-password");
+    const eyeIcon = document.getElementById("pw-eye-icon");
+    if (!pwInput) return;
+    
+    if (pwInput.type === "password") {
+        pwInput.type = "text";
+        if (eyeIcon) eyeIcon.setAttribute("data-lucide", "eye-off");
+    } else {
+        pwInput.type = "password";
+        if (eyeIcon) eyeIcon.setAttribute("data-lucide", "eye");
+    }
+    lucide.createIcons();
+}
+
+
+
+
+
+
 async function sendMessage() {
     if (state.chatBusy) return;
+    
+    if (!currentUser && !checkGuestActionAllowed()) return;
+    
+    if (currentUser && !isUserPro()) {
+        addBotMessage("🔒 Произвольный ввод вопросов AI доступен только в PRO-версии. Вы можете нажимать быстрые кнопки выше!");
+        return;
+    }
+    
     const i = document.getElementById("chat-input"), t = i.value.trim();
     if (!t) return;
+    // ... далее текущий код sendMessage() без изменений
     i.value = ""; setChatBusy(true); addUserMessage(t); addLoading(); trackRequest();
     try {
         const controller = new AbortController();
@@ -1628,6 +1747,7 @@ async function sendMessage() {
 
 async function askQuick(q) {
     if (!q || state.chatBusy) return;
+    if (!checkGuestActionAllowed()) return;
     setChatBusy(true); addUserMessage(q); addLoading(); trackRequest();
     try {
         const controller = new AbortController();
