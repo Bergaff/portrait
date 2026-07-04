@@ -157,18 +157,6 @@ function updateChatInputState() {
         if (sendBtn) sendBtn.disabled = true;
     }
 }
-
- {
-        chatInput.disabled = false;
-        chatInput.placeholder = "Спросите про район...";
-        if (sendBtn) sendBtn.disabled = false;
-    } else {
-        // Зарегистрированный, но FREE юзер - не может свободно писать
-        chatInput.disabled = true;
-        chatInput.placeholder = "🔒 Произвольный ввод доступен в PRO. Используйте кнопки выше!";
-        if (sendBtn) sendBtn.disabled = true;
-    }
-}
 async function socialLogin(provider) {
     showAuthError("Открываем " + provider + "...");
     const { error } = await supabaseClient.auth.signInWithOAuth({
