@@ -102,14 +102,26 @@
 
                 <!-- Действия -->
                 <div id="actions-panel" style="display:none;">
-                    <button id="analyze-btn" class="btn-primary" onclick="openAnalyzeModal('free')">
-                        <i data-lucide="activity"></i> Анализ
-                        <span class="btn-tag tag-free">FREE</span>
-                    </button>
-                    <button id="analyze-pro-btn" class="btn-outline" onclick="openAnalyzeModal('pro')">
-                        <i data-lucide="sparkles"></i> Премиум-анализ
-                        <span class="btn-tag tag-pro">PRO</span>
-                    </button>
+                    <div class="btn-with-info">
+                        <button id="analyze-btn" class="btn-primary" onclick="openAnalyzeModal('free')">
+                            <i data-lucide="activity"></i> Анализ
+                            <span class="btn-tag tag-free">FREE</span>
+                        </button>
+                        <div class="info-tooltip-trigger" data-tooltip="Базовый экспресс-анализ на базе OpenStreetMap. Показывает инфраструктуру, метрики и расчёт индекса квартала. Бесплатно и быстро.">
+                            <i data-lucide="help-circle"></i>
+                        </div>
+                    </div>
+                    
+                    <div class="btn-with-info">
+                        <button id="analyze-pro-btn" class="btn-outline" onclick="openAnalyzeModal('pro')">
+                            <i data-lucide="sparkles"></i> Премиум-анализ
+                            <span class="btn-tag tag-pro">PRO</span>
+                        </button>
+                        <div class="info-tooltip-trigger" data-tooltip="Глубокий анализ реальных данных с Яндекс.Карт: рейтинги, отзывы жителей, выявление проблемных мест и ИИ-анализ комментариев.">
+                            <i data-lucide="help-circle"></i>
+                        </div>
+                    </div>
+
                     <button id="report-btn" class="btn-outline" style="display:none;" onclick="generateReport()">
                         <i data-lucide="file-text" id="report-icon"></i> Полный отчёт
                     </button>
@@ -179,7 +191,12 @@
             </button>
             <div class="divider"><span>или email</span></div>
             <input type="email" id="auth-email" placeholder="Email" class="auth-input">
-            <input type="password" id="auth-password" placeholder="Пароль" class="auth-input">
+            <div class="password-wrapper">
+                <input type="password" id="auth-password" placeholder="Пароль" class="auth-input">
+                <button type="button" class="btn-toggle-pw" onclick="togglePasswordVisibility()" title="Показать/скрыть пароль">
+                    <i data-lucide="eye" id="pw-eye-icon"></i>
+                </button>
+            </div>
             <div id="auth-error"></div>
             <!-- Кнопки в одну строку -->
             <div class="modal-actions auth-buttons" style="display:flex;gap:10px;margin-top:8px;">
