@@ -228,8 +228,9 @@ body[data-theme="light"] #theme-toggle .icon-light { display: block; }
 </button>
 
 
-#user-info { display: flex; align-items: center; gap: 16px; }
+#user-info { display: flex; align-items: center; gap: 12px; }
 #user-info > * { flex-shrink: 0; white-space: nowrap; }
+#user-info #profile-trigger { margin-right: 4px; }
 #profile-trigger {
     width: 34px; height: 34px; border-radius: 50%;
     background: var(--primary); color: var(--primary-foreground);
@@ -747,34 +748,34 @@ body[data-theme="light"] #chat-messages .msg-user {
         height: 100dvh; /* Используем dvh для мобилок */
         overscroll-behavior-y: none;
     }
-    
-    #app { 
-        height: 100dvh; 
-        width: 100vw; 
-        flex-direction: column; 
+
+    #app {
+        height: 100dvh;
+        width: 100vw;
+        flex-direction: column;
     }
-    
+
     #rail { display: none; }
     #sidebar { display: none !important; }
     #resizer { display: none !important; } /* Скрываем ползунок ресайза */
-    
+
     #header {
         padding: 0 12px;
         height: 56px;
         flex-shrink: 0;
     }
-    
+
     .header-title {
         font-size: 15px;
     }
-    
+
     #workspace {
         flex: 1;
         flex-direction: column;
         height: auto;
         min-height: 0;
     }
-    
+
     #map-section {
         flex: 1;
         border: none;
@@ -782,12 +783,12 @@ body[data-theme="light"] #chat-messages .msg-user {
         width: 100%;
         position: relative;
     }
-    
+
     #map {
         height: 100%;
         width: 100%;
     }
-    
+
     /* Кнопка открытия панели (справа сверху) */
     #mobile-panel-btn {
         position: absolute;
@@ -1005,4 +1006,21 @@ body[data-theme="light"] #chat-messages .msg-user {
 .density-popup-empty { font-size: 12px; color: var(--muted-fg); text-align: center; padding: 8px 0; }
 
 
+from services.subscription import is_pro_user, is_vip_user, get_user_id_from_token
+
+class StatusRequest(BaseModel):
+    access_token: str = ""
+    email: str = ""
+
+@router.post("/auth/status")
+async def check_status(req: StatusRequest):
+    user_id = get_user_id_from_token(req.access_token) if req.access_token else ""
+    vip = is_vip_user(user_id, req.email)
+    pro = is_pro_user(user_id, req.email)
+    return {
+        "user_id": user_id,
+        "is_pro": pro,
+        "is_vip": vip,
+        "plan": "vip" if vip else ("pro" if pro else "free")
+    }
 
