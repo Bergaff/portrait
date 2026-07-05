@@ -291,21 +291,32 @@ async function fetchUserPlan() {
     try {
         const { data: { session } } = await supabaseClient.auth.getSession();
         const token = session?.access_token || "";
+        
         const r = await fetch("/api/auth/status", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ access_token: token, email: currentUser.email || "" })
+            body: JSON.stringify({ 
+                access_token: token, 
+                email: currentUser.email || "" 
+            })
         });
+        
         const d = await r.json();
-        if (d.is_pro) {
+        
+        if (d.is_vip) {
             localStorage.setItem("is_pro_" + currentUser.id, "1");
+            localStorage.setItem("plan_" + currentUser.id, "vip");
+        } else if (d.is_pro) {
+            localStorage.setItem("is_pro_" + currentUser.id, "1");
+            localStorage.setItem("plan_" + currentUser.id, "pro");
         } else {
             localStorage.removeItem("is_pro_" + currentUser.id);
+            localStorage.setItem("plan_" + currentUser.id, "free");
         }
-        localStorage.setItem("plan_" + currentUser.id, d.plan || "free");
+        
         updateChatInputState();
     } catch (e) {
-        console.warn("Не удалось получить план:", e);
+        console.warn("Не удалось получить статус VIP/PRO:", e);
     }
 }
 function saveStats() { if (currentUser) localStorage.setItem("stats_" + currentUser.id, JSON.stringify(userStats)); }
@@ -1001,38 +1012,46 @@ function initCity() {
         const d = JSON.parse(saved);
         map.setView([d.lat, d.lon], 13);
         document.getElementById("city-modal").style.display = "none";
-        addBotMessage("Привет! Я AI-урбанист\n\nГород: " + d.name + "\n\nВыберите интересующую вас область с помощью:\n⬡ многоугольника или ▢ прямоугольника с левой стороны карты\n→ далее нажмите Анализ\n\nВы можете изменить точки области или удалить неудачную через меню редактирования.");
+        addBotMessage("Привет! Я AI-урбанист\\n\\nГород: " + d.name);
         return;
     }
+
     document.getElementById("city-modal").style.display = "flex";
-    cityInitTimeout = setTimeout(() => { if (!detectedCity) showCityInput(); }, 12000);
+
     if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
-            async pos => {
+            async (pos) => {
                 try {
                     const r = await fetch("https://nominatim.openstreetmap.org/reverse?lat=" + pos.coords.latitude + "&lon=" + pos.coords.longitude + "&format=json&accept-language=ru");
                     const d = await r.json();
-                    const c = d.address?.city || d.address?.town || d.address?.village || "Ваш город";
-                    clearTimeout(cityInitTimeout);
-                    showCityConfirm(c, pos.coords.latitude, pos.coords.longitude);
-                } catch (e) { clearTimeout(cityInitTimeout); detectByIP(); }
+                    const city = d.address?.city || d.address?.town || d.address?.village || "Ваш город";
+                    showCityConfirm(city, pos.coords.latitude, pos.coords.longitude);
+                } catch (e) {
+                    skipToMoscow();
+                }
             },
-            () => { clearTimeout(cityInitTimeout); detectByIP(); },
-            { timeout: 8000 }
+            () => {
+                // Пользователь отказал в доступе к геолокации
+                skipToMoscow();
+            },
+            { timeout: 7000, enableHighAccuracy: false }
         );
-    } else detectByIP();
+    } else {
+        skipToMoscow();
+    }
 }
 
-async function detectByIP() {
-    try {
-        const r = await fetch("https://ipapi.co/json/");
-        if (r.ok) {
-            const d = await r.json();
-            if (d.city && d.latitude) { clearTimeout(cityInitTimeout); showCityConfirm(d.city, d.latitude, d.longitude); return; }
-        }
-    } catch (e) {}
+function skipToMoscow() {
     clearTimeout(cityInitTimeout);
-    showCityInput();
+    detectedCity = "Москва";
+    detectedLat = 55.7558;
+    detectedLon = 37.6173;
+    document.getElementById("city-detecting").style.display = "none";
+    document.getElementById("city-confirm").style.display = "none";
+    document.getElementById("city-input-block").style.display = "none";
+    map.setView([55.7558, 37.6173], 13);
+    document.getElementById("city-modal").style.display = "none";
+    addBotMessage("Привет! Я AI-урбанист\\n\\nГород: Москва\\n\\nВыберите интересующую вас область с помощью инструментов слева.");
 }
 
 function showCityConfirm(c, lat, lon) {
