@@ -60,7 +60,7 @@
     <div class="header-right">
         <div class="search-box">
             <i data-lucide="search" class="search-icon"></i>
-            <input type="text" id="search-input" placeholder="Поиск адреса, района...">
+            <input type="text" id="search-input" placeholder="Поиск места..." class="search-input" autocomplete="off" spellcheck="false">
             <div id="search-results"></div>
         </div>
         <button id="theme-toggle" onclick="toggleTheme()" title="Тема">
@@ -144,7 +144,7 @@
                     </div>
                     <div id="chat-messages"></div>
                     <div class="chat-input-box">
-                        <input type="text" id="chat-input" placeholder="Спросите про район...">
+                        <input type="text" id="chat-input" placeholder="Спросите про район..." class="chat-input" autocomplete="off" spellcheck="false">
                         <button id="send-btn" onclick="sendMessage()" title="Отправить">
                             <i data-lucide="send"></i>
                         </button>
