@@ -231,11 +231,12 @@ body[data-theme="light"] #theme-toggle .icon-light { display: block; }
 #user-info { 
     display: flex; 
     align-items: center; 
-    gap: 8px; 
+    gap: 4px; 
 }
-#profile-trigger { 
-    margin-right: 6px; 
-}
+#user-info > * { margin: 0 6px; }
+#user-info #profile-trigger { margin-left: 8px; margin-right: 8px; }
+#user-info #theme-toggle { margin-right: 4px; }
+#user-info #logout-btn { margin-left: 4px; }
 #profile-trigger {
     width: 34px; height: 34px; border-radius: 50%;
     background: var(--primary); color: var(--primary-foreground);
