@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 from routers import analyze, report, chat, geocode, auth, scraper
 
@@ -30,8 +30,14 @@ async def root():
 
 @app.get("/favicon.png")
 async def favicon_png():
-    return FileResponse("frontend/favicon.png")
+    path = "frontend/favicon.png"
+    if os.path.exists(path):
+        return FileResponse(path)
+    return Response(status_code=204)  # нет файла — просто пустой ответ, без ошибки
 
 @app.get("/favicon.ico")
 async def favicon_ico():
-    return FileResponse("frontend/favicon.png")
+    path = "frontend/favicon.png"
+    if os.path.exists(path):
+        return FileResponse(path)
+    return Response(status_code=204)
