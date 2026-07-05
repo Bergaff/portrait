@@ -1012,7 +1012,8 @@ function initCity() {
         const d = JSON.parse(saved);
         map.setView([d.lat, d.lon], 13);
         document.getElementById("city-modal").style.display = "none";
-        addBotMessage("Привет! Я AI-урбанист\\n\\nГород: " + d.name);
+        const msg = "Привет! Я AI-урбанист\n\nГород: " + d.name + "\n\nВыберите интересующую вас область с помощью:\n⬡ многоугольника или ▢ прямоугольника с левой стороны карты\n→ далее нажмите Анализ\n\nВы можете изменить точки области или удалить неудачную через меню редактирования.";
+        addBotMessage(msg);
         return;
     }
 
@@ -1051,7 +1052,8 @@ function skipToMoscow() {
     document.getElementById("city-input-block").style.display = "none";
     map.setView([55.7558, 37.6173], 13);
     document.getElementById("city-modal").style.display = "none";
-    addBotMessage("Привет! Я AI-урбанист\\n\\nГород: Москва\\n\\nВыберите интересующую вас область с помощью инструментов слева.");
+    const msg = "Привет! Я AI-урбанист\n\nГород: Москва\n\nВыберите интересующую вас область с помощью:\n⬡ многоугольника или ▢ прямоугольника с левой стороны карты\n→ далее нажмите Анализ\n\nВы можете изменить точки области или удалить неудачную через меню редактирования.";
+    addBotMessage(msg);
 }
 
 function showCityConfirm(c, lat, lon) {
