@@ -39,9 +39,15 @@ window.confirmCity = function() {
     map.setView([detectedLat, detectedLon], 13);
     const modal = document.getElementById("city-modal");
     if (modal) modal.style.display = "none";
-    const msg = "Привет! Я AI-урбанист\n\nГород: " + detectedCity + "\n\nВыберите интересующую вас область с помощью:\n⬡ многоугольника или ▢ прямоугольника с левой стороны карты\n→ далее нажмите Анализ\n\nВы можете изменить точки области или удалить неудачную через меню редактирования.";
-    addBotMessage(msg);
-};
+    addBotMessage(`Привет! Я AI-урбанист
+
+Город: Москва
+
+Выберите интересующую вас область с помощью:
+⬡ многоугольника или ▢ прямоугольника с левой стороны карты
+→ далее нажмите Анализ
+
+Вы можете изменить точки области или удалить неудачную через меню редактирования.`);
 
 window.skipCity = function() {
     clearTimeout(cityInitTimeout);
@@ -49,10 +55,15 @@ window.skipCity = function() {
     map.setView([55.7558, 37.6173], 13);
     const modal = document.getElementById("city-modal");
     if (modal) modal.style.display = "none";
-    const msg = "Привет! Я AI-урбанист\n\nГород: Москва\n\nВыберите интересующую вас область с помощью:\n⬡ многоугольника или ▢ прямоугольника с левой стороны карты\n→ далее нажмите Анализ\n\nВы можете изменить точки области или удалить неудачную через меню редактирования.";
-    addBotMessage(msg);
-};
+    addBotMessage(`Привет! Я AI-урбанист
 
+Город: Москва
+
+Выберите интересующую вас область с помощью:
+⬡ многоугольника или ▢ прямоугольника с левой стороны карты
+→ далее нажмите Анализ
+
+Вы можете изменить точки области или удалить неудачную через меню редактирования.`);
 window.showCityInput = function() {
     clearTimeout(cityInitTimeout);
     document.getElementById("city-detecting").style.display = "none";
@@ -1052,8 +1063,15 @@ function skipToMoscow() {
     document.getElementById("city-input-block").style.display = "none";
     map.setView([55.7558, 37.6173], 13);
     document.getElementById("city-modal").style.display = "none";
-    const msg = "Привет! Я AI-урбанист\n\nГород: Москва\n\nВыберите интересующую вас область с помощью:\n⬡ многоугольника или ▢ прямоугольника с левой стороны карты\n→ далее нажмите Анализ\n\nВы можете изменить точки области или удалить неудачную через меню редактирования.";
-    addBotMessage(msg);
+    addBotMessage(`Привет! Я AI-урбанист
+
+Город: Москва
+
+Выберите интересующую вас область с помощью:
+⬡ многоугольника или ▢ прямоугольника с левой стороны карты
+→ далее нажмите Анализ
+
+Вы можете изменить точки области или удалить неудачную через меню редактирования.`);
 }
 
 function showCityConfirm(c, lat, lon) {
@@ -1276,6 +1294,11 @@ function renderFilteredMarkers() {
 
         if (state.activeFilter && state.activeFilter !== "Разнообразие") {
             if (!(CAT_MAP[state.activeFilter] || []).includes(o.amenity)) return;
+        }
+
+        let name = o.name || o.amenity || "";
+        if (!name || name === "Без названия" || name === "Другое") {
+            name = o.amenity ? o.amenity.charAt(0).toUpperCase() + o.amenity.slice(1) : "Точка интереса";
         }
 
         // Каждая категория окрашивается в свой цвет из CAT_COLORS
