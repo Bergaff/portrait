@@ -144,7 +144,7 @@ function updateChatInputState() {
     const chatInput = document.getElementById("chat-input");
     const sendBtn = document.getElementById("send-btn");
     if (!chatInput) return;
-    
+
     // Ввод разрешен ТОЛЬКО если есть юзер И он PRO
     if (isUserPro()) {
         chatInput.disabled = false;
@@ -283,6 +283,30 @@ function toggleAuth() {
 function loadUserStats() {
     const s = localStorage.getItem("stats_" + currentUser?.id);
     if (s) userStats = JSON.parse(s);
+    fetchUserPlan();
+}
+
+async function fetchUserPlan() {
+    if (!currentUser) return;
+    try {
+        const { data: { session } } = await supabaseClient.auth.getSession();
+        const token = session?.access_token || "";
+        const r = await fetch("/api/auth/status", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ access_token: token, email: currentUser.email || "" })
+        });
+        const d = await r.json();
+        if (d.is_pro) {
+            localStorage.setItem("is_pro_" + currentUser.id, "1");
+        } else {
+            localStorage.removeItem("is_pro_" + currentUser.id);
+        }
+        localStorage.setItem("plan_" + currentUser.id, d.plan || "free");
+        updateChatInputState();
+    } catch (e) {
+        console.warn("Не удалось получить план:", e);
+    }
 }
 function saveStats() { if (currentUser) localStorage.setItem("stats_" + currentUser.id, JSON.stringify(userStats)); }
 function trackRequest() { userStats.requests++; saveStats(); }
@@ -293,7 +317,13 @@ function openProfile() {
     const container = document.getElementById("profile-content");
     container.innerHTML = "";
     const info = document.createElement("div");
+    const plan = localStorage.getItem("plan_" + currentUser.id) || "free";
+    let planBadge = '<span style="color:var(--muted-fg)">Free</span>';
+    if (plan === "vip") planBadge = '<span style="background:linear-gradient(135deg,#feca57,#ff6b6b);color:#000;padding:2px 8px;border-radius:5px;font-weight:700;font-size:11px">👑 VIP LIFETIME</span>';
+    else if (plan === "pro") planBadge = '<span style="background:var(--primary);color:#fff;padding:2px 8px;border-radius:5px;font-weight:700;font-size:11px">PRO</span>';
+
     info.innerHTML =
+        '<div class="profile-row"><span class="profile-label">Тариф</span><span>' + planBadge + '</span></div>' +
         '<div class="profile-row"><span class="profile-label">Email</span><span>' + (currentUser.email || "—") + '</span></div>' +
         '<div class="profile-row"><span class="profile-label">Способ входа</span><span style="text-transform:capitalize">' + p + '</span></div>' +
         '<div class="profile-row"><span class="profile-label">Регистрация</span><span>' + d + '</span></div>' +
@@ -1018,24 +1048,24 @@ document.getElementById("search-input").addEventListener("input", e => {
     clearTimeout(searchTimeout);
     const q = e.target.value.trim();
     const resultsContainer = document.getElementById("search-results");
-    
-    if (q.length < 2) { 
-        resultsContainer.innerHTML = ""; 
-        return; 
+
+    if (q.length < 2) {
+        resultsContainer.innerHTML = "";
+        return;
     }
-    
+
     searchTimeout = setTimeout(async () => {
         try {
             const r = await fetch("/api/search?q=" + encodeURIComponent(q));
             if (!r.ok) return;
             const d = await r.json();
-            
+
             resultsContainer.innerHTML = "";
-            if (!d.results || !d.results.length) { 
-                resultsContainer.innerHTML = '<div class="search-item">Не найдено</div>'; 
-                return; 
+            if (!d.results || !d.results.length) {
+                resultsContainer.innerHTML = '<div class="search-item">Не найдено</div>';
+                return;
             }
-            
+
             d.results.forEach(item => {
                 const div = document.createElement("div");
                 div.className = "search-item";
@@ -1958,3 +1988,4 @@ setTimeout(() => {
     initCity();
     lucide.createIcons();
 }, 100);
+
