@@ -1923,6 +1923,8 @@ function markdownToHtml(t) {
 
 // ==================== MOBILE PANEL ====================
 const mobilePanelBtn = document.getElementById("mobile-panel-btn");
+const mobileHandle = document.getElementById("mobile-handle");
+const mobileBackBtn = document.getElementById("mobile-back-btn");
 const mobileOverlay = document.getElementById("mobile-overlay");
 const mobileClose = document.getElementById("mobile-close");
 const mobileBody = document.getElementById("mobile-body");
@@ -1958,12 +1960,14 @@ function openMobilePanel() {
     moveToMobile();
     mobileOverlay.classList.add("active");
     document.body.style.overflow = "hidden";
+    if (mobileHandle) mobileHandle.style.display = "none";
     lucide.createIcons();
 }
 
 function closeMobilePanel() {
     mobileOverlay.classList.remove("active");
     document.body.style.overflow = "";
+    if (mobileHandle) mobileHandle.style.display = "flex";
     setTimeout(moveBackToSidebar, 300);
 }
 
@@ -1974,6 +1978,35 @@ if (mobilePanelBtn) {
 
 if (mobileClose) {
     mobileClose.addEventListener("click", closeMobilePanel);
+}
+
+if (mobileBackBtn) {
+    mobileBackBtn.addEventListener("click", closeMobilePanel);
+}
+
+if (mobileHandle) {
+    mobileHandle.addEventListener("click", openMobilePanel);
+
+    let handleStartX = 0;
+    let handleDragging = false;
+
+    mobileHandle.addEventListener("touchstart", (e) => {
+        handleStartX = e.touches[0].clientX;
+        handleDragging = true;
+    }, {passive: true});
+
+    mobileHandle.addEventListener("touchmove", (e) => {
+        if (!handleDragging) return;
+        const diff = handleStartX - e.touches[0].clientX;
+        if (diff > 35) {
+            handleDragging = false;
+            openMobilePanel();
+        }
+    }, {passive: true});
+
+    mobileHandle.addEventListener("touchend", () => {
+        handleDragging = false;
+    });
 }
 
 if (mobileOverlay) {
@@ -2029,4 +2062,27 @@ document.addEventListener('DOMContentLoaded', function() {
         input.setAttribute('spellcheck', 'false');
     });
 });
+
+
+async function forgotPassword() {
+    const email = document.getElementById("auth-email").value.trim();
+    if (!email) {
+        showAuthError("Введите email в поле выше, затем нажмите «Забыли пароль?»");
+        return;
+    }
+    const { error } = await supabaseClient.auth.resetPasswordForEmail(email, {
+        redirectTo: window.location.origin
+    });
+    if (error) {
+        showAuthError("Ошибка: " + translateError(error.message));
+    } else {
+        showAuthError("✓ Ссылка для сброса пароля отправлена на почту");
+    }
+}
+
+
+
+
+
+
 
