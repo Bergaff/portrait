@@ -33,6 +33,17 @@ async function safeJson(response) {
 let detectedCity = "", detectedLat = 55.7558, detectedLon = 37.6173;
 let cityInitTimeout = null;
 
+const map = L.map("map").setView([55.7558, 37.6173], 13);
+const initTheme = document.body.getAttribute("data-theme") || "dark";
+const initTileUrl = initTheme === "light"
+    ? "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+    : "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png";
+window.currentTileLayer = L.tileLayer(initTileUrl, {
+    attribution: "OpenStreetMap, CARTO", maxZoom: 19
+}).addTo(map);
+window.map = map;
+
+
 window.confirmCity = function() {
     clearTimeout(cityInitTimeout);
     localStorage.setItem("qp_city", JSON.stringify({ name: detectedCity, lat: detectedLat, lon: detectedLon }));
@@ -224,13 +235,13 @@ function processOAuthCallback() {
 
 function saveMapPosition() {
     try {
-        if (typeof window.map !== "undefined" && window.map && window.map.getCenter) {
+        if (window.map && typeof window.map.getCenter === 'function') {
             const c = window.map.getCenter();
             const z = window.map.getZoom();
             localStorage.setItem("qp_map_pos", JSON.stringify({ lat: c.lat, lon: c.lng, zoom: z }));
         }
     } catch (e) {
-        console.warn("saveMapPosition skipped:", e.message);
+        console.warn("Map position not saved:", e.message);
     }
 }
 // OAuth callback запускаем ПОСЛЕ инициализации карты
@@ -549,15 +560,7 @@ if (resizer && sidebar) {
 }
 
 // ========== MAP ==========
-const map = L.map("map").setView([55.7558, 37.6173], 13);
-const initTheme = document.body.getAttribute("data-theme") || "dark";
-const initTileUrl = initTheme === "light"
-    ? "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
-    : "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png";
-window.currentTileLayer = L.tileLayer(initTileUrl, {
-    attribution: "OpenStreetMap, CARTO", maxZoom: 19
-}).addTo(map);
-window.map = map;
+
 const savedPos = localStorage.getItem("qp_map_pos");
 if (savedPos) {
     try {
