@@ -223,13 +223,17 @@ function processOAuthCallback() {
 }
 
 function saveMapPosition() {
-    if (window.map) {
-        const c = map.getCenter();
-        const z = map.getZoom();
-        localStorage.setItem("qp_map_pos", JSON.stringify({ lat: c.lat, lon: c.lng, zoom: z }));
+    try {
+        if (typeof window.map !== "undefined" && window.map && window.map.getCenter) {
+            const c = window.map.getCenter();
+            const z = window.map.getZoom();
+            localStorage.setItem("qp_map_pos", JSON.stringify({ lat: c.lat, lon: c.lng, zoom: z }));
+        }
+    } catch (e) {
+        console.warn("saveMapPosition skipped:", e.message);
     }
 }
-processOAuthCallback();
+// OAuth callback запускаем ПОСЛЕ инициализации карты
 window.addEventListener("hashchange", processOAuthCallback);
 
 // ========== EMAIL AUTH ==========
@@ -1048,6 +1052,7 @@ function skipToMoscow() {
     map.setView([55.7558, 37.6173], 13);
     document.getElementById("city-modal").style.display = "none";
     addBotMessage("Привет! Я AI-урбанист\n\nГород: Москва\n\nВыберите интересующую вас область с помощью:\n⬡ многоугольника или ▢ прямоугольника с левой стороны карты\n→ далее нажмите Анализ\n\nВы можете изменить точки области или удалить неудачную через меню редактирования.");
+}
 
 function showCityConfirm(c, lat, lon) {
     detectedCity = c; detectedLat = lat; detectedLon = lon;
@@ -2006,6 +2011,8 @@ window.addEventListener("resize", () => {
 setTimeout(() => {
     initCity();
     lucide.createIcons();
+    // OAuth callback обрабатываем ТОЛЬКО после того, как карта создана
+    try { processOAuthCallback(); } catch(e) { console.warn(e); }
 }, 100);
 
 
