@@ -223,20 +223,19 @@ body[data-theme="light"] #theme-toggle .icon-light { display: block; }
 
 
 
-<button id="mobile-panel-btn">
-<i data-lucide="menu"></i>
-</button>
-
-
-#user-info { 
-    display: flex; 
-    align-items: center; 
-    gap: 4px; 
+#user-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
 }
-#user-info > * { margin: 0 6px; }
-#user-info #profile-trigger { margin-left: 8px; margin-right: 8px; }
-#user-info #theme-toggle { margin-right: 4px; }
-#user-info #logout-btn { margin-left: 4px; }
+#theme-toggle {
+    margin-right: 2px;
+}
+#profile-trigger {
+    margin-left: 2px;
+    margin-right: 6px;
+}
+
 #profile-trigger {
     width: 34px; height: 34px; border-radius: 50%;
     background: var(--primary); color: var(--primary-foreground);
@@ -751,35 +750,35 @@ body[data-theme="light"] #chat-messages .msg-user {
         height: 100dvh;
         width: 100vw;
     }
-    
+
     #app {
         height: 100dvh;
         width: 100vw;
         flex-direction: column;
     }
-    
+
     #rail { display: none; }
     #sidebar { display: none !important; }
     #resizer { display: none !important; }
-    
+
     #header {
         padding: 0 12px;
         height: 56px;
         flex-shrink: 0;
         z-index: 100;
     }
-    
+
     #workspace {
         flex: 1;
         position: relative;
     }
-    
+
     #map-section {
         position: absolute;
         top: 0; left: 0; right: 0; bottom: 0;
         z-index: 1;
     }
-    
+
     #mobile-panel-btn {
         position: absolute;
         top: 68px;
@@ -798,7 +797,7 @@ body[data-theme="light"] #chat-messages .msg-user {
         font-size: 22px;
         cursor: pointer;
     }
-    
+
     /* Остальной мобильный CSS (overlay) оставьте как был ранее */
     #mobile-overlay {
         position: fixed;
@@ -808,9 +807,9 @@ body[data-theme="light"] #chat-messages .msg-user {
         display: none;
         align-items: flex-end;
     }
-    
+
     #mobile-overlay.active { display: flex; }
-    
+
     #mobile-content {
         width: 100%;
         max-height: 92%;
@@ -955,31 +954,20 @@ body[data-theme="light"] #chat-messages .msg-user {
 .density-popup-empty { font-size: 12px; color: var(--muted-fg); text-align: center; padding: 8px 0; }
 
 
-from services.subscription import is_pro_user, is_vip_user, get_user_id_from_token
-
-class StatusRequest(BaseModel):
-    access_token: str = ""
-    email: str = ""
-
-@router.post("/auth/status")
-async def check_status(req: StatusRequest):
-    user_id = get_user_id_from_token(req.access_token) if req.access_token else ""
-    vip = is_vip_user(user_id, req.email)
-    pro = is_pro_user(user_id, req.email)
-    return {
-        "user_id": user_id,
-        "is_pro": pro,
-        "is_vip": vip,
-        "plan": "vip" if vip else ("pro" if pro else "free")
-    }
-
-
 .combined-card {
     transition: none !important;
 }
 .combined-card:hover {
-    background: var(--card) !important;
+    background: linear-gradient(135deg, var(--card), var(--secondary)) !important;
     transform: none !important;
+}
+
+
+input {
+    autocomplete: off;
+    autocorrect: off;
+    autocapitalize: off;
+    spellcheck: false;
 }
 
 
