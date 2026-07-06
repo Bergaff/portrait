@@ -39,15 +39,8 @@ window.confirmCity = function() {
     map.setView([detectedLat, detectedLon], 13);
     const modal = document.getElementById("city-modal");
     if (modal) modal.style.display = "none";
-    addBotMessage(`Привет! Я AI-урбанист
-
-Город: Москва
-
-Выберите интересующую вас область с помощью:
-⬡ многоугольника или ▢ прямоугольника с левой стороны карты
-→ далее нажмите Анализ
-
-Вы можете изменить точки области или удалить неудачную через меню редактирования.`);
+    addBotMessage("Привет! Я AI-урбанист\n\nГород: " + detectedCity + "\n\nВыберите интересующую вас область с помощью:\n⬡ многоугольника или ▢ прямоугольника с левой стороны карты\n→ далее нажмите Анализ\n\nВы можете изменить точки области или удалить неудачную через меню редактирования.");
+};
 
 window.skipCity = function() {
     clearTimeout(cityInitTimeout);
@@ -55,20 +48,7 @@ window.skipCity = function() {
     map.setView([55.7558, 37.6173], 13);
     const modal = document.getElementById("city-modal");
     if (modal) modal.style.display = "none";
-    addBotMessage(`Привет! Я AI-урбанист
-
-Город: Москва
-
-Выберите интересующую вас область с помощью:
-⬡ многоугольника или ▢ прямоугольника с левой стороны карты
-→ далее нажмите Анализ
-
-Вы можете изменить точки области или удалить неудачную через меню редактирования.`);
-window.showCityInput = function() {
-    clearTimeout(cityInitTimeout);
-    document.getElementById("city-detecting").style.display = "none";
-    document.getElementById("city-confirm").style.display = "none";
-    document.getElementById("city-input-block").style.display = "block";
+    addBotMessage("Привет! Я AI-урбанист\n\nГород: Москва\n\nВыберите интересующую вас область с помощью:\n⬡ многоугольника или ▢ прямоугольника с левой стороны карты\n→ далее нажмите Анализ\n\nВы можете изменить точки области или удалить неудачную через меню редактирования.");
 };
 
 window.searchAndGoCity = async function() {
