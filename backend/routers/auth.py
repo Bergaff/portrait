@@ -79,3 +79,25 @@ async def mailru_auth(req: AuthRequest):
     uid = str(user.get("id", ""))
     email = user.get("email") or "mailru_" + uid + "@placeholder.local"
     return create_or_login_supabase(email, uid, "mailru", user.get("first_name",""), user.get("last_name",""))
+
+from services.subscription import is_pro_user, is_vip_user, get_user_id_from_token
+from pydantic import BaseModel
+
+class StatusRequest(BaseModel):
+    access_token: str = ""
+    email: str = ""
+
+@router.post("/auth/status")
+async def auth_status(req: StatusRequest):
+    user_id = get_user_id_from_token(req.access_token) if req.access_token else ""
+    vip = is_vip_user(user_id=user_id, email=req.email)
+    pro = is_pro_user(user_id=user_id, email=req.email)
+    return {
+        "user_id": user_id,
+        "is_vip": vip,
+        "is_pro": pro,
+        "plan": "vip" if vip else ("pro" if pro else "free")
+    }
+
+
+
