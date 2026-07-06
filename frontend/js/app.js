@@ -302,18 +302,18 @@ async function fetchUserPlan() {
     try {
         const { data: { session } } = await supabaseClient.auth.getSession();
         const token = session?.access_token || "";
-        
+
         const r = await fetch("/api/auth/status", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ 
-                access_token: token, 
-                email: currentUser.email || "" 
+            body: JSON.stringify({
+                access_token: token,
+                email: currentUser.email || ""
             })
         });
-        
+
         const d = await r.json();
-        
+
         if (d.is_vip) {
             localStorage.setItem("is_pro_" + currentUser.id, "1");
             localStorage.setItem("plan_" + currentUser.id, "vip");
@@ -324,7 +324,7 @@ async function fetchUserPlan() {
             localStorage.removeItem("is_pro_" + currentUser.id);
             localStorage.setItem("plan_" + currentUser.id, "free");
         }
-        
+
         updateChatInputState();
     } catch (e) {
         console.warn("Не удалось получить статус VIP/PRO:", e);
@@ -974,20 +974,6 @@ map.on('draw:drawstop', function(e) {
     killDrawing();
 });
 
-map.on("draw:created", function(e) {
-    console.log("DRAW:CREATED", e.layerType);
-    drawnItems.clearLayers();
-    drawnItems.addLayer(e.layer);
-    state.drawnLayer = e.layer;
-
-    const b = e.layer.getBounds();
-    state.bbox = b.getSouth() + "," + b.getWest() + "," + b.getNorth() + "," + b.getEast();
-
-    document.getElementById("actions-panel").style.display = "flex";
-    state.reportCache = null;
-
-    killDrawing();
-});
 
 map.on("draw:deleted", function(e) {
     console.log("DRAW:DELETED");
@@ -1310,7 +1296,7 @@ function renderFilteredMarkers() {
             fillColor: color,
             fillOpacity: 0.9,
             weight: 1
-        }).bindTooltip("<b>" + o.name + "</b><br><span style='color:" + color + "'>●</span> " + poiCategory, { direction: "top" }).addTo(state.markersLayer);
+        }).bindTooltip("<b>" + (o.name || "Точка интереса") + "</b><br><span style='color:" + color + "'>●</span> " + (poiCategory || "Другое"), { direction: "top" }).addTo(state.markersLayer);
     });
     state.markersLayer.addTo(map);
 }
@@ -2032,4 +2018,17 @@ setTimeout(() => {
     initCity();
     lucide.createIcons();
 }, 100);
+
+
+
+
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('input').forEach(function(input) {
+        input.setAttribute('autocomplete', 'off');
+        input.setAttribute('autocorrect', 'off');
+        input.setAttribute('autocapitalize', 'none');
+        input.setAttribute('spellcheck', 'false');
+    });
+});
+
 
