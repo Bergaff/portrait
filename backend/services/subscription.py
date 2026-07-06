@@ -1,4 +1,3 @@
-"""
 import os
 import requests
 from fastapi import HTTPException
@@ -7,8 +6,7 @@ SUPABASE_URL = "https://epjtzfhlyyrzmcjqqlyw.supabase.co"
 SUPABASE_SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_KEY", "")
 
 VIP_LIFETIME_USERS = set([
-    "PTL010012@proton.me",     # ваш email
-    # Добавляйте сюда другие email или user_id
+    "PTL010012@proton.me",
 ])
 
 def is_vip_user(user_id: str = None, email: str = None) -> bool:
