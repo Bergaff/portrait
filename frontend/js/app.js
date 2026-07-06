@@ -66,6 +66,14 @@ window.searchAndGoCity = async function() {
     window.confirmCity();
 };
 
+window.showCityInput = function() {
+    clearTimeout(cityInitTimeout);
+    document.getElementById("city-detecting").style.display = "none";
+    document.getElementById("city-confirm").style.display = "none";
+    document.getElementById("city-input-block").style.display = "block";
+};
+
+// ========== ТЕМА ==========
 // ========== ТЕМА ==========
 function toggleTheme() {
     const cur = document.body.getAttribute("data-theme") || "dark";
@@ -954,6 +962,16 @@ map.on('draw:drawstop', function(e) {
     killDrawing();
 });
 
+map.on("draw:created", function(e) {
+    drawnItems.clearLayers();
+    drawnItems.addLayer(e.layer);
+    state.drawnLayer = e.layer;
+    var b = e.layer.getBounds();
+    state.bbox = b.getSouth() + "," + b.getWest() + "," + b.getNorth() + "," + b.getEast();
+    document.getElementById("actions-panel").style.display = "flex";
+    state.reportCache = null;
+    killDrawing();
+});
 
 map.on("draw:deleted", function(e) {
     console.log("DRAW:DELETED");
@@ -1029,16 +1047,7 @@ function skipToMoscow() {
     document.getElementById("city-input-block").style.display = "none";
     map.setView([55.7558, 37.6173], 13);
     document.getElementById("city-modal").style.display = "none";
-    addBotMessage(`Привет! Я AI-урбанист
-
-Город: Москва
-
-Выберите интересующую вас область с помощью:
-⬡ многоугольника или ▢ прямоугольника с левой стороны карты
-→ далее нажмите Анализ
-
-Вы можете изменить точки области или удалить неудачную через меню редактирования.`);
-}
+    addBotMessage("Привет! Я AI-урбанист\n\nГород: Москва\n\nВыберите интересующую вас область с помощью:\n⬡ многоугольника или ▢ прямоугольника с левой стороны карты\n→ далее нажмите Анализ\n\nВы можете изменить точки области или удалить неудачную через меню редактирования.");
 
 function showCityConfirm(c, lat, lon) {
     detectedCity = c; detectedLat = lat; detectedLon = lon;
