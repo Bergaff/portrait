@@ -44,9 +44,10 @@ body[data-theme="light"] {
 
 
 #mobile-panel-btn { display: none; }
+#mobile-handle { display: none; }
 #mobile-overlay { display: none; }
 @media (max-width: 920px) {
-    #mobile-panel-btn { display: flex; }
+    #mobile-handle { display: flex; }
 }
 
 
@@ -779,24 +780,29 @@ body[data-theme="light"] #chat-messages .msg-user {
         z-index: 1;
     }
 
-    #mobile-panel-btn {
-        position: absolute;
-        top: 68px;
-        right: 14px;
-        z-index: 1000;
-        width: 48px;
-        height: 48px;
-        border-radius: 50%;
+    #mobile-panel-btn { display: none !important; }
+
+    #mobile-handle {
+        position: fixed;
+        top: 50%;
+        right: 0;
+        transform: translateY(-50%);
+        width: 30px;
+        height: 84px;
         background: var(--primary);
-        color: white;
-        border: none;
-        box-shadow: 0 4px 15px rgba(124, 92, 255, 0.5);
+        border-radius: 42px 0 0 42px;
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: 22px;
+        z-index: 999;
+        box-shadow: -6px 0 20px rgba(0,0,0,0.35);
         cursor: pointer;
+        color: #fff;
+        touch-action: none;
+        transition: transform 0.2s;
     }
+    #mobile-handle:active { transform: translateY(-50%) scale(0.92); }
+    #mobile-handle svg { width: 18px; height: 18px; }
 
     /* Остальной мобильный CSS (overlay) оставьте как был ранее */
     #mobile-overlay {
@@ -954,12 +960,23 @@ body[data-theme="light"] #chat-messages .msg-user {
 .density-popup-empty { font-size: 12px; color: var(--muted-fg); text-align: center; padding: 8px 0; }
 
 
+
+
 .combined-card {
+    background: linear-gradient(135deg, var(--primary), oklch(0.48 0.22 290)) !important;
+    border: none !important;
+    color: #fff !important;
     transition: none !important;
 }
 .combined-card:hover {
-    background: linear-gradient(135deg, var(--card), var(--secondary)) !important;
+    background: linear-gradient(135deg, var(--primary), oklch(0.48 0.22 290)) !important;
     transform: none !important;
+}
+.combined-card .score-big,
+.combined-card .score-sub,
+.combined-card .score-label,
+.combined-card .btn-density-details {
+    transition: none !important;
 }
 
 
