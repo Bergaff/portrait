@@ -39,17 +39,13 @@
     <div id="mobile-overlay">
         <div id="mobile-content">
             <div id="mobile-header">
-                <button id="mobile-back-btn" class="btn-outline" style="padding:6px 12px;font-size:12px">
-                    <i data-lucide="arrow-left"></i> К карте
-                </button>
-                <span>Инструменты</span>
-                <div id="mobile-close">×</div>
+                <span>AI-урбанист</span>
+                <div id="mobile-close" style="cursor:pointer;font-size:14px;font-weight:600;">← Карта</div>
             </div>
-              <div id="mobile-body">
-                  <!-- Содержимое будет перенесено сюда через JS -->
-              </div>
-          </div>
-      </div>
+            <div id="mobile-body" style="flex:1;overflow-y:auto;padding:0;display:flex;flex-direction:column;">
+            </div>
+        </div>
+    </div>
 
         </div>
         <div class="rail-bottom">
@@ -68,7 +64,7 @@
     <div class="header-right">
         <div class="search-box">
             <i data-lucide="search" class="search-icon"></i>
-            <input type="text" id="search-input" placeholder="Поиск места..." class="search-input" autocomplete="new-password" name="unique_search_id_8829">
+            <input type="text" id="search-input" placeholder="Поиск места..." class="search-input" autocomplete="new-password" name="unique_search_id_8829" readonly onfocus="this.removeAttribute('readonly');">
             <div id="search-results"></div>
         </div>
         <button id="theme-toggle" onclick="toggleTheme()" title="Тема">
@@ -97,6 +93,10 @@
                         <span><span class="legend-dot mid"></span>Средняя</span>
                         <span><span class="legend-dot low"></span>Низкая</span>
                     </div>
+                <!-- Ручка для открытия чата на мобильных -->
+                <div id="mobile-handle">
+                    <i data-lucide="message-circle"></i>
+                </div>
                 </div>
             </section>
 
@@ -152,7 +152,7 @@
                     </div>
                     <div id="chat-messages"></div>
                     <div class="chat-input-box">
-                        <input type="text" id="chat-input" placeholder="Спросите про район..." class="chat-input" autocomplete="new-password" name="unique_chat_id_9921">
+                        <input type="text" id="chat-input" placeholder="Спросите про район..." class="chat-input" autocomplete="new-password" name="unique_chat_id_9921" readonly onfocus="this.removeAttribute('readonly');">
                         <button id="send-btn" onclick="sendMessage()" title="Отправить">
                             <i data-lucide="send"></i>
                         </button>
@@ -240,6 +240,22 @@
         </div>
     </div>
 
+    <!-- Reset Password Modal -->
+    <div id="reset-password-modal" style="display:none;">
+        <div class="modal-bg"></div>
+        <div class="modal-box">
+            <h2>Новый пароль</h2>
+            <p>Введите новый пароль для вашего аккаунта</p>
+            <div class="password-wrapper">
+                <input type="password" id="new-password-input" placeholder="Новый пароль" class="auth-input" autocomplete="new-password">
+                <button type="button" class="btn-toggle-pw" onclick="toggleNewPasswordVisibility()" title="Показать/скрыть пароль">
+                    <i data-lucide="eye" id="new-pw-eye-icon"></i>
+                </button>
+            </div>
+            <div id="reset-password-error" style="color:var(--destructive);font-size:12px;min-height:18px;margin-bottom:4px;"></div>
+            <button class="btn-primary" onclick="submitNewPassword()">Сохранить пароль</button>
+        </div>
+    </div>
 
     <!-- Analyze Settings Modal -->
     <div id="analyze-modal" style="display:none;">
