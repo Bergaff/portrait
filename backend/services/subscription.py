@@ -6,7 +6,8 @@ SUPABASE_URL = "https://epjtzfhlyyrzmcjqqlyw.supabase.co"
 SUPABASE_SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_KEY", "")
 
 VIP_LIFETIME_USERS = set([
-    "PTL010012@proton.me, tech@tim2030.by"
+    "PTL010012@proton.me",
+    "tech@tim2030.by"
 ])
 
 def is_vip_user(user_id: str = None, email: str = None) -> bool:
