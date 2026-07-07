@@ -196,6 +196,14 @@ function processOAuthCallback() {
     const hp = new URLSearchParams(window.location.hash.substring(1));
     const code = sp.get("code");
     const error = sp.get("error");
+
+    // Обработка восстановления пароля
+    const recoveryType = hp.get("type");
+    if (recoveryType === "recovery") {
+        document.getElementById("reset-password-modal").style.display = "flex";
+        lucide.createIcons();
+        return;
+    }
     if (error) {
         showAuthError("Ошибка: " + error);
         window.history.replaceState({}, document.title, window.location.pathname);
@@ -1833,7 +1841,43 @@ function togglePasswordVisibility() {
     lucide.createIcons();
 }
 
+function toggleNewPasswordVisibility() {
+    const pwInput = document.getElementById("new-password-input");
+    const eyeIcon = document.getElementById("new-pw-eye-icon");
+    if (!pwInput) return;
 
+    if (pwInput.type === "password") {
+        pwInput.type = "text";
+        if (eyeIcon) eyeIcon.setAttribute("data-lucide", "eye-off");
+    } else {
+        pwInput.type = "password";
+        if (eyeIcon) eyeIcon.setAttribute("data-lucide", "eye");
+    }
+    lucide.createIcons();
+}
+
+async function submitNewPassword() {
+    const pw = document.getElementById("new-password-input").value;
+    const errorEl = document.getElementById("reset-password-error");
+
+    if (!pw || pw.length < 6) {
+        errorEl.textContent = "Минимум 6 символов";
+        return;
+    }
+
+    errorEl.textContent = "Сохраняем...";
+
+    const { error } = await supabaseClient.auth.updateUser({ password: pw });
+
+    if (error) {
+        errorEl.textContent = "Ошибка: " + error.message;
+    } else {
+        errorEl.textContent = "";
+        document.getElementById("reset-password-modal").style.display = "none";
+        window.history.replaceState({}, document.title, window.location.pathname);
+        addBotMessage("✓ Пароль успешно изменён! Теперь вы можете войти с новым паролем.");
+    }
+}
 
 
 
@@ -1922,100 +1966,63 @@ function markdownToHtml(t) {
 }
 
 // ==================== MOBILE PANEL ====================
-const mobilePanelBtn = document.getElementById("mobile-panel-btn");
 const mobileHandle = document.getElementById("mobile-handle");
-const mobileBackBtn = document.getElementById("mobile-back-btn");
 const mobileOverlay = document.getElementById("mobile-overlay");
 const mobileClose = document.getElementById("mobile-close");
 const mobileBody = document.getElementById("mobile-body");
 const mobileContent = document.getElementById("mobile-content");
 
-// Элементы, которые перемещаем между sidebar и mobile
-const movableIds = ["scores-panel", "actions-panel", "quick-questions", "chat-section"];
-
 function isMobile() {
     return window.innerWidth <= 920 || ('ontouchstart' in window && window.innerWidth < 1024);
 }
 
-function moveToMobile() {
-    movableIds.forEach(id => {
-        const el = document.getElementById(id);
-        if (el && sidebar.contains(el)) {
-            mobileBody.appendChild(el);
-        }
-    });
+function moveChatToMobile() {
+    const chat = document.getElementById("chat-section");
+    const quick = document.getElementById("quick-questions");
+    if (chat && mobileBody && chat.parentElement !== mobileBody) {
+        mobileBody.innerHTML = "";
+        if (quick) mobileBody.appendChild(quick);
+        mobileBody.appendChild(chat);
+    }
 }
 
-function moveBackToSidebar() {
-    movableIds.forEach(id => {
-        const el = document.getElementById(id);
-        if (el && mobileBody.contains(el)) {
-            sidebar.appendChild(el);
-        }
-    });
+function moveChatBackToSidebar() {
+    const chat = document.getElementById("chat-section");
+    const quick = document.getElementById("quick-questions");
+    if (chat && sidebar && mobileBody && mobileBody.contains(chat)) {
+        sidebar.appendChild(quick);
+        sidebar.appendChild(chat);
+    }
 }
 
-function openMobilePanel() {
+function openMobileChat() {
     if (!isMobile()) return;
-    moveToMobile();
+    moveChatToMobile();
     mobileOverlay.classList.add("active");
     document.body.style.overflow = "hidden";
-    if (mobileHandle) mobileHandle.style.display = "none";
     lucide.createIcons();
 }
 
-function closeMobilePanel() {
+function closeMobileChat() {
     mobileOverlay.classList.remove("active");
     document.body.style.overflow = "";
-    if (mobileHandle) mobileHandle.style.display = "flex";
-    setTimeout(moveBackToSidebar, 300);
-}
-
-// Обработчики
-if (mobilePanelBtn) {
-    mobilePanelBtn.addEventListener("click", openMobilePanel);
-}
-
-if (mobileClose) {
-    mobileClose.addEventListener("click", closeMobilePanel);
-}
-
-if (mobileBackBtn) {
-    mobileBackBtn.addEventListener("click", closeMobilePanel);
+    setTimeout(moveChatBackToSidebar, 300);
 }
 
 if (mobileHandle) {
-    mobileHandle.addEventListener("click", openMobilePanel);
+    mobileHandle.addEventListener("click", openMobileChat);
+}
 
-    let handleStartX = 0;
-    let handleDragging = false;
-
-    mobileHandle.addEventListener("touchstart", (e) => {
-        handleStartX = e.touches[0].clientX;
-        handleDragging = true;
-    }, {passive: true});
-
-    mobileHandle.addEventListener("touchmove", (e) => {
-        if (!handleDragging) return;
-        const diff = handleStartX - e.touches[0].clientX;
-        if (diff > 35) {
-            handleDragging = false;
-            openMobilePanel();
-        }
-    }, {passive: true});
-
-    mobileHandle.addEventListener("touchend", () => {
-        handleDragging = false;
-    });
+if (mobileClose) {
+    mobileClose.addEventListener("click", closeMobileChat);
 }
 
 if (mobileOverlay) {
     mobileOverlay.addEventListener("click", (e) => {
-        if (e.target === mobileOverlay) closeMobilePanel();
+        if (e.target === mobileOverlay) closeMobileChat();
     });
 }
 
-// Свайп вниз для закрытия
 let touchStartY = 0;
 if (mobileContent) {
     mobileContent.addEventListener("touchstart", (e) => {
@@ -2023,25 +2030,20 @@ if (mobileContent) {
     }, {passive: true});
 
     mobileContent.addEventListener("touchmove", (e) => {
-        if (mobileBody.scrollTop > 0) return;
-        const diff = e.touches[0].clientY - touchStartY;
-        if (diff > 80) closeMobilePanel();
+        const msgBox = mobileBody.querySelector('#chat-messages');
+        if (msgBox && msgBox.scrollTop > 0) return;
+        if (e.touches[0].clientY - touchStartY > 80) closeMobileChat();
     }, {passive: true});
 }
 
-// Escape для закрытия
 document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && mobileOverlay?.classList.contains("active")) {
-        closeMobilePanel();
-    }
+    if (e.key === "Escape" && mobileOverlay?.classList.contains("active")) closeMobileChat();
 });
 
-// При ресайзе на десктоп возвращаем всё назад
 window.addEventListener("resize", () => {
-    if (!isMobile() && mobileOverlay?.classList.contains("active")) {
-        closeMobilePanel();
-    }
+    if (!isMobile() && mobileOverlay?.classList.contains("active")) closeMobileChat();
 });
+
 
 // Запуск инициализации города
 setTimeout(() => {
