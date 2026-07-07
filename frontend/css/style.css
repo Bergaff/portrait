@@ -769,6 +769,35 @@ body[data-theme="light"] #chat-messages .msg-user {
         z-index: 100;
     }
 
+
+        .header-badge {
+        display: none !important;
+    }
+
+    .header-left {
+        flex-shrink: 0;
+    }
+
+    .header-title {
+        font-size: 12px;
+    }
+
+    .search-box {
+        flex: 1;
+        max-width: none;
+        width: auto;
+        margin: 0 8px;
+    }
+
+    .header-right {
+        flex-shrink: 0;
+        gap: 8px;
+    }
+
+    #user-info {
+        gap: 8px;
+    }
+
     #workspace {
         flex: 1;
         position: relative;
