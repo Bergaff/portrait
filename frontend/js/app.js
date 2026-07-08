@@ -197,6 +197,24 @@ function processOAuthCallback() {
     const code = sp.get("code");
     const error = sp.get("error");
 
+    const isRecovery =
+        sp.get("reset_password") === "1" ||
+        sp.get("type") === "recovery" ||
+        hp.get("type") === "recovery" ||
+        localStorage.getItem("qp_password_recovery_pending") === "1";
+
+    if (isRecovery) {
+        localStorage.removeItem("qp_password_recovery_pending");
+        setTimeout(() => {
+            const modal = document.getElementById("reset-password-modal");
+            if (modal) {
+                modal.style.display = "flex";
+                lucide.createIcons();
+            }
+        }, 300);
+        return;
+    }
+
     // Обработка восстановления пароля
     const recoveryType = hp.get("type");
     if (recoveryType === "recovery") {
@@ -1084,6 +1102,7 @@ document.getElementById("search-input").addEventListener("input", e => {
         return;
     }
 
+
     searchTimeout = setTimeout(async () => {
         try {
             const r = await fetch("/api/search?q=" + encodeURIComponent(q));
@@ -1112,6 +1131,33 @@ document.getElementById("search-input").addEventListener("input", e => {
         }
     }, 400);
 });
+
+
+    const searchBoxEl = document.querySelector(".search-box");
+    const searchInputEl = document.getElementById("search-input");
+
+    if (searchInputEl && searchBoxEl) {
+        searchInputEl.addEventListener("focus", () => {
+            if (isMobile()) {
+                searchBoxEl.classList.add("search-open");
+                searchInputEl.removeAttribute("readonly");
+            }
+        });
+
+        document.addEventListener("click", (e) => {
+            if (isMobile() && searchBoxEl.classList.contains("search-open")) {
+                if (!e.target.closest(".search-box")) {
+                    searchBoxEl.classList.remove("search-open");
+                    document.getElementById("search-results").innerHTML = "";
+                    if (!searchInputEl.value) searchInputEl.setAttribute("readonly", "readonly");
+                }
+            }
+        });
+    }
+
+
+
+
 
 function processApifyResults(items, fromCache) {
     const filtered = items.filter(o => o.lat && o.lon && isInsideDrawn(o.lat, o.lon));
@@ -1874,6 +1920,7 @@ async function submitNewPassword() {
     } else {
         errorEl.textContent = "";
         document.getElementById("reset-password-modal").style.display = "none";
+        localStorage.removeItem("qp_password_recovery_pending");
         window.history.replaceState({}, document.title, window.location.pathname);
         addBotMessage("✓ Пароль успешно изменён! Теперь вы можете войти с новым паролем.");
     }
@@ -1979,38 +2026,58 @@ function isMobile() {
 function moveChatToMobile() {
     const chat = document.getElementById("chat-section");
     const quick = document.getElementById("quick-questions");
-    if (chat && mobileBody && chat.parentElement !== mobileBody) {
-        mobileBody.innerHTML = "";
-        if (quick) mobileBody.appendChild(quick);
-        mobileBody.appendChild(chat);
+
+    if (!mobileBody || !chat) return;
+
+    mobileBody.innerHTML = "";
+
+    if (quick) {
+        quick.style.display = quick.style.display === "none" ? "none" : "flex";
+        mobileBody.appendChild(quick);
     }
+
+    mobileBody.appendChild(chat);
 }
 
 function moveChatBackToSidebar() {
     const chat = document.getElementById("chat-section");
     const quick = document.getElementById("quick-questions");
-    if (chat && sidebar && mobileBody && mobileBody.contains(chat)) {
-        sidebar.appendChild(quick);
-        sidebar.appendChild(chat);
+    const sidebarEl = document.getElementById("sidebar");
+
+    if (!sidebarEl || !chat) return;
+
+    if (quick && mobileBody && mobileBody.contains(quick)) {
+        sidebarEl.appendChild(quick);
+    }
+
+    if (mobileBody && mobileBody.contains(chat)) {
+        sidebarEl.appendChild(chat);
     }
 }
 
 function openMobileChat() {
-    if (!isMobile()) return;
     moveChatToMobile();
-    mobileOverlay.classList.add("active");
+    if (mobileOverlay) mobileOverlay.classList.add("active");
     document.body.style.overflow = "hidden";
+    setTimeout(() => {
+        const chatMessages = document.getElementById("chat-messages");
+        if (chatMessages) chatMessages.scrollTop = chatMessages.scrollHeight;
+    }, 100);
     lucide.createIcons();
 }
 
 function closeMobileChat() {
-    mobileOverlay.classList.remove("active");
+    if (mobileOverlay) mobileOverlay.classList.remove("active");
     document.body.style.overflow = "";
-    setTimeout(moveChatBackToSidebar, 300);
+    setTimeout(moveChatBackToSidebar, 250);
 }
 
 if (mobileHandle) {
     mobileHandle.addEventListener("click", openMobileChat);
+    mobileHandle.addEventListener("touchend", function(e) {
+        e.preventDefault();
+        openMobileChat();
+    }, { passive: false });
 }
 
 if (mobileClose) {
@@ -2027,21 +2094,25 @@ let touchStartY = 0;
 if (mobileContent) {
     mobileContent.addEventListener("touchstart", (e) => {
         touchStartY = e.touches[0].clientY;
-    }, {passive: true});
+    }, { passive: true });
 
     mobileContent.addEventListener("touchmove", (e) => {
-        const msgBox = mobileBody.querySelector('#chat-messages');
+        const msgBox = document.getElementById("chat-messages");
         if (msgBox && msgBox.scrollTop > 0) return;
-        if (e.touches[0].clientY - touchStartY > 80) closeMobileChat();
-    }, {passive: true});
+        if (e.touches[0].clientY - touchStartY > 90) closeMobileChat();
+    }, { passive: true });
 }
 
 document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && mobileOverlay?.classList.contains("active")) closeMobileChat();
+    if (e.key === "Escape" && mobileOverlay?.classList.contains("active")) {
+        closeMobileChat();
+    }
 });
 
 window.addEventListener("resize", () => {
-    if (!isMobile() && mobileOverlay?.classList.contains("active")) closeMobileChat();
+    if (!isMobile() && mobileOverlay?.classList.contains("active")) {
+        closeMobileChat();
+    }
 });
 
 
@@ -2072,9 +2143,13 @@ async function forgotPassword() {
         showAuthError("Введите email в поле выше, затем нажмите «Забыли пароль?»");
         return;
     }
+
+    localStorage.setItem("qp_password_recovery_pending", "1");
+
     const { error } = await supabaseClient.auth.resetPasswordForEmail(email, {
-        redirectTo: window.location.origin
+        redirectTo: window.location.origin + "/?reset_password=1"
     });
+
     if (error) {
         showAuthError("Ошибка: " + translateError(error.message));
     } else {
