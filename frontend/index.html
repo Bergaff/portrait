@@ -6,7 +6,7 @@
     <title>Atlas — Портрет квартала</title>
     <link rel="icon" type="image/png" href="/static/favicon.png">
     <link rel="shortcut icon" type="image/png" href="/favicon.png">
-    <link rel="stylesheet" href="/css/style.css?v=2">
+    <link rel="stylesheet" href="/css/style.css?v=3">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
     <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css">
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -30,12 +30,11 @@
             <button class="rail-btn" title="Районы" data-icon="layers"></button>
             <button class="rail-btn" title="События" data-icon="activity"></button>
 
-    <!-- Mobile drag handle -->
-    <div id="mobile-handle">
+    <!-- Мобильная ручка и оверлей (должны быть в корне #app) -->
+    <div id="mobile-handle" title="AI-чат">
         <i data-lucide="message-circle"></i>
     </div>
 
-    <!-- Mobile Overlay -->
     <div id="mobile-overlay">
         <div id="mobile-content">
             <div id="mobile-header">
@@ -46,8 +45,8 @@
             </div>
         </div>
     </div>
+</div> <!-- Конец #app -->
 
-        </div>
         <div class="rail-bottom">
             <button class="rail-btn" title="Настройки" data-icon="settings"></button>
         </div>
@@ -244,16 +243,19 @@
     <div id="reset-password-modal" style="display:none;">
         <div class="modal-bg"></div>
         <div class="modal-box">
-            <h2>Новый пароль</h2>
-            <p>Введите новый пароль для вашего аккаунта</p>
+            <h2>Смена пароля</h2>
+            <p>Придумайте новый пароль для входа</p>
             <div class="password-wrapper">
                 <input type="password" id="new-password-input" placeholder="Новый пароль" class="auth-input" autocomplete="new-password">
                 <button type="button" class="btn-toggle-pw" onclick="toggleNewPasswordVisibility()" title="Показать/скрыть пароль">
                     <i data-lucide="eye" id="new-pw-eye-icon"></i>
                 </button>
             </div>
+            <div class="password-wrapper">
+                <input type="password" id="confirm-password-input" placeholder="Повторите пароль" class="auth-input" autocomplete="new-password">
+            </div>
             <div id="reset-password-error" style="color:var(--destructive);font-size:12px;min-height:18px;margin-bottom:4px;"></div>
-            <button class="btn-primary" onclick="submitNewPassword()">Сохранить пароль</button>
+            <button class="btn-primary" onclick="submitNewPassword()">Сохранить</button>
         </div>
     </div>
 
@@ -287,7 +289,7 @@
     const SUPABASE_URL = "https://epjtzfhlyyrzmcjqqlyw.supabase.co";
     const SUPABASE_KEY = "sb_publishable_yj38_Ym2C8_Sm-MN-icfSw_URGS-h-J";
 </script>
-<script src="/js/app.js?v=2"></script>
+<script src="/js/app.js?v=3"></script>
 <script>lucide.createIcons();</script>
 </body>
 </html>
