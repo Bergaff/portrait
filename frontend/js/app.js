@@ -194,24 +194,25 @@ function loginMailruDirect() {
 function processOAuthCallback() {
     const sp = new URLSearchParams(window.location.search);
     const hp = new URLSearchParams(window.location.hash.substring(1));
-    const code = sp.get("code");
-    const error = sp.get("error");
-
-    const isRecovery =
-        sp.get("reset_password") === "1" ||
-        sp.get("type") === "recovery" ||
+    
+    // Проверяем все возможные варианты recovery-ссылки
+    const isRecovery = 
+        sp.get("reset") === "1" || 
+        sp.get("type") === "recovery" || 
         hp.get("type") === "recovery" ||
-        localStorage.getItem("qp_password_recovery_pending") === "1";
+        localStorage.getItem("qp_recovery_pending") === "1";
 
     if (isRecovery) {
-        localStorage.removeItem("qp_password_recovery_pending");
+        localStorage.removeItem("qp_recovery_pending");
         setTimeout(() => {
             const modal = document.getElementById("reset-password-modal");
             if (modal) {
                 modal.style.display = "flex";
                 lucide.createIcons();
+                // Очищаем URL, чтобы не показывать модалку при каждом обновлении
+                window.history.replaceState({}, document.title, window.location.pathname);
             }
-        }, 300);
+        }, 200);
         return;
     }
 
@@ -1888,31 +1889,34 @@ function togglePasswordVisibility() {
 }
 
 function toggleNewPasswordVisibility() {
-    const pwInput = document.getElementById("new-password-input");
-    const eyeIcon = document.getElementById("new-pw-eye-icon");
-    if (!pwInput) return;
-
-    if (pwInput.type === "password") {
-        pwInput.type = "text";
-        if (eyeIcon) eyeIcon.setAttribute("data-lucide", "eye-off");
+    const pw = document.getElementById("new-password-input");
+    const eye = document.getElementById("new-pw-eye-icon");
+    if (!pw) return;
+    if (pw.type === "password") {
+        pw.type = "text";
+        if (eye) eye.setAttribute("data-lucide", "eye-off");
     } else {
-        pwInput.type = "password";
-        if (eyeIcon) eyeIcon.setAttribute("data-lucide", "eye");
+        pw.type = "password";
+        if (eye) eye.setAttribute("data-lucide", "eye");
     }
     lucide.createIcons();
 }
 
 async function submitNewPassword() {
     const pw = document.getElementById("new-password-input").value;
+    const confirmPw = document.getElementById("confirm-password-input").value;
     const errorEl = document.getElementById("reset-password-error");
 
     if (!pw || pw.length < 6) {
         errorEl.textContent = "Минимум 6 символов";
         return;
     }
+    if (pw !== confirmPw) {
+        errorEl.textContent = "Пароли не совпадают";
+        return;
+    }
 
     errorEl.textContent = "Сохраняем...";
-
     const { error } = await supabaseClient.auth.updateUser({ password: pw });
 
     if (error) {
@@ -1920,9 +1924,8 @@ async function submitNewPassword() {
     } else {
         errorEl.textContent = "";
         document.getElementById("reset-password-modal").style.display = "none";
-        localStorage.removeItem("qp_password_recovery_pending");
-        window.history.replaceState({}, document.title, window.location.pathname);
-        addBotMessage("✓ Пароль успешно изменён! Теперь вы можете войти с новым паролем.");
+        addBotMessage("✅ Пароль успешно изменён! Теперь войдите с новым паролем.");
+        toggleAuth(); // Открываем окно входа
     }
 }
 
@@ -2140,20 +2143,38 @@ document.addEventListener('DOMContentLoaded', function() {
 async function forgotPassword() {
     const email = document.getElementById("auth-email").value.trim();
     if (!email) {
-        showAuthError("Введите email в поле выше, затем нажмите «Забыли пароль?»");
+        showAuthError("Введите email, затем нажмите «Забыли пароль?»");
         return;
     }
 
-    localStorage.setItem("qp_password_recovery_pending", "1");
+    const btn = document.querySelector('[onclick="forgotPassword()"]');
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = "Отправляем...";
+    }
 
-    const { error } = await supabaseClient.auth.resetPasswordForEmail(email, {
-        redirectTo: window.location.origin + "/?reset_password=1"
-    });
+    try {
+        const { error } = await supabaseClient.auth.resetPasswordForEmail(email, {
+            redirectTo: window.location.origin + "?reset=1"
+        });
 
-    if (error) {
-        showAuthError("Ошибка: " + translateError(error.message));
-    } else {
-        showAuthError("✓ Ссылка для сброса пароля отправлена на почту");
+        if (error) {
+            if (error.message.includes("rate limit") || error.status === 429) {
+                showAuthError("⏳ Слишком много запросов. Попробуйте через 15 минут.");
+            } else {
+                showAuthError("Ошибка: " + translateError(error.message));
+            }
+        } else {
+            showAuthError("✓ Ссылка отправлена на почту. Проверьте папку «Спам».");
+            localStorage.setItem("qp_recovery_pending", "1");
+        }
+    } catch (e) {
+        showAuthError("Ошибка сети. Попробуйте позже.");
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.textContent = "Забыли пароль?";
+        }
     }
 }
 
