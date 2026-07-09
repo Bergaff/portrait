@@ -1013,10 +1013,10 @@ map.on('draw:drawstart', function(e) {
 });
 
 
-// ==================== РЕДАКТИРОВАНИЕ ОБЛАСТИ ====================
+// ==================== РЕДАКТИРОВАНИЕ ОБЛАСТИ (ИСПРАВЛЕННАЯ ВЕРСИЯ) ====================
 
-let editOriginalLayer = null;
 let editMode = false;
+let originalLayerState = null;
 
 map.on('draw:editstart', function(e) {
     console.log("EDIT START");
@@ -1027,19 +1027,19 @@ map.on('draw:editstart', function(e) {
     const layer = e.layer || (drawnItems.getLayers()[0]);
     if (layer) {
         if (layer instanceof L.Rectangle) {
-            editOriginalLayer = L.latLngBounds(layer.getBounds());
-        } else if (layer.getLatLngs) {
-            editOriginalLayer = JSON.parse(JSON.stringify(layer.getLatLngs()));
+            originalLayerState = layer.getBounds();
+        } else if (layer instanceof L.Polygon) {
+            originalLayerState = JSON.parse(JSON.stringify(layer.getLatLngs()));
         }
     }
 
     createToolbar();
 
-    // Настраиваем кнопки тулбара под редактирование
+    // Настраиваем кнопки тулбара
     const finishBtn = document.getElementById("btn-finish");
     if (finishBtn) {
         finishBtn.innerHTML = '✓ Принять изменения';
-        finishBtn.style.background = "#10b981";
+        finishBtn.style.background = '#22c55e';
         finishBtn.onclick = function(e) {
             e.stopPropagation();
             acceptEdit();
@@ -1048,7 +1048,8 @@ map.on('draw:editstart', function(e) {
 
     const cancelBtn = document.getElementById("btn-cancel") || document.getElementById("btn-undo");
     if (cancelBtn) {
-        cancelBtn.innerHTML = '✕ Отменить';
+        cancelBtn.innerHTML = '✕ Отменить изменения';
+        cancelBtn.style.background = '#ef4444';
         cancelBtn.onclick = function(e) {
             e.stopPropagation();
             cancelEdit();
@@ -1067,7 +1068,7 @@ function acceptEdit() {
         state.drawnLayer = layer;
 
         const b = layer.getBounds();
-        state.bbox = `${b.getSouth().toFixed(6)},${b.getWest().toFixed(6)},${b.getNorth().toFixed(6)},${b.getEast().toFixed(6)}`;
+        state.bbox = `${b.getSouth()},${b.getWest()},${b.getNorth()},${b.getEast()}`;
 
         document.getElementById("actions-panel").style.display = "flex";
         state.reportCache = null;
@@ -1076,10 +1077,11 @@ function acceptEdit() {
 
     killDrawing();
     editMode = false;
+    originalLayerState = null;
 }
 
 function cancelEdit() {
-    if (!editMode || !editOriginalLayer) {
+    if (!editMode || !originalLayerState) {
         killDrawing();
         return;
     }
@@ -1088,38 +1090,42 @@ function cancelEdit() {
     if (layers.length > 0) {
         const layer = layers[0];
 
-        if (layer instanceof L.Rectangle && editOriginalLayer instanceof L.LatLngBounds) {
-            layer.setBounds(editOriginalLayer);
-        } else if (layer instanceof L.Polygon && Array.isArray(editOriginalLayer)) {
-            layer.setLatLngs(editOriginalLayer);
+        if (layer instanceof L.Rectangle && originalLayerState instanceof L.LatLngBounds) {
+            layer.setBounds(originalLayerState);
+        } else if (layer instanceof L.Polygon && Array.isArray(originalLayerState)) {
+            layer.setLatLngs(originalLayerState);
         }
 
-        // Обновляем bbox
+        // Обновляем bbox после отката
         const b = layer.getBounds();
-        state.bbox = `${b.getSouth().toFixed(6)},${b.getWest().toFixed(6)},${b.getNorth().toFixed(6)},${b.getEast().toFixed(6)}`;
-        addBotMessage("❌ Изменения отменены, возвращена исходная область");
+        state.bbox = `${b.getSouth()},${b.getWest()},${b.getNorth()},${b.getEast()}`;
+
+        addBotMessage("❌ Изменения отменены — возвращено исходное состояние");
     }
 
     killDrawing();
     editMode = false;
+    originalLayerState = null;
 }
 
-map.on('draw:editstop', function(e) {
+map.on('draw:editstop', function() {
     console.log("EDIT STOP");
-    killDrawing();
-    editMode = false;
+    if (editMode) {
+        killDrawing();
+        editMode = false;
+    }
 });
 
 map.on('draw:edited', function(e) {
     console.log("DRAW:EDITED");
-    const layers = e.layers && e.layers.getLayers ? e.layers.getLayers() : [];
+    const layers = e.layers ? e.layers.getLayers() : drawnItems.getLayers();
     if (layers.length === 0) return;
 
     const layer = layers[0];
     state.drawnLayer = layer;
 
     const b = layer.getBounds();
-    state.bbox = `${b.getSouth().toFixed(6)},${b.getWest().toFixed(6)},${b.getNorth().toFixed(6)},${b.getEast().toFixed(6)}`;
+    state.bbox = `${b.getSouth()},${b.getWest()},${b.getNorth()},${b.getEast()}`;
 
     document.getElementById("actions-panel").style.display = "flex";
     state.reportCache = null;
