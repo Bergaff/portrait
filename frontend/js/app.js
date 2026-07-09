@@ -1871,34 +1871,7 @@ function checkGuestActionAllowed() {
     return true;
 }
 
-function togglePasswordVisibility() {
-    const pwInput = document.getElementById("auth-password");
-    const eyeIcon = document.getElementById("pw-eye-icon");
-    if (!pwInput) return;
 
-    if (pwInput.type === "password") {
-        pwInput.type = "text";
-        if (eyeIcon) eyeIcon.setAttribute("data-lucide", "eye-off");
-    } else {
-        pwInput.type = "password";
-        if (eyeIcon) eyeIcon.setAttribute("data-lucide", "eye");
-    }
-    lucide.createIcons();
-}
-
-function toggleNewPasswordVisibility() {
-    const pw = document.getElementById("new-password-input");
-    const eye = document.getElementById("new-pw-eye-icon");
-    if (!pw) return;
-    if (pw.type === "password") {
-        pw.type = "text";
-        if (eye) eye.setAttribute("data-lucide", "eye-off");
-    } else {
-        pw.type = "password";
-        if (eye) eye.setAttribute("data-lucide", "eye");
-    }
-    lucide.createIcons();
-}
 
 async function submitNewPassword() {
     const pw = document.getElementById("new-password-input").value;
@@ -2009,6 +1982,12 @@ function toggleHelp() {
     const p = document.getElementById("help-popup");
     if (p) p.style.display = p.style.display === "none" ? "flex" : "none";
 }
+
+function toggleHelp() {
+    const p = document.getElementById("help-popup");
+    if (p) p.style.display = p.style.display === "none" ? "flex" : "none";
+}
+
 function markdownToHtml(t) {
     if (!t) return "";
     return t.replace(/^## (.+)$/gm, "<h2>$1</h2>")
