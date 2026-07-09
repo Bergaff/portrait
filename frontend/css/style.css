@@ -970,20 +970,26 @@ body[data-theme="light"] #chat-messages .msg-user {
 } /* ===== КОНЕЦ @media (max-width: 920px) ===== */
 
 
-/* Кнопка Help */
 #help-btn {
-    width: 34px; height: 34px;
-    background: var(--background);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    color: var(--muted-fg);
-    cursor: pointer;
-    display: flex; align-items: center; justify-content: center;
-    transition: all 0.15s;
-    flex-shrink: 0;
+    display: none;
 }
-#help-btn:hover { background: var(--accent); color: var(--foreground); border-color: var(--primary); }
-#help-btn svg { width: 16px; height: 16px; }
+@media (max-width: 920px) {
+    #help-btn {
+        display: flex;
+        width: 34px;
+        height: 34px;
+        background: var(--background);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        color: var(--muted-fg);
+        cursor: pointer;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+    #help-btn:hover { background: var(--accent); color: var(--foreground); border-color: var(--primary); }
+    #help-btn svg { width: 16px; height: 16px; }
+}
 
 /* Help popup */
 #help-popup {
