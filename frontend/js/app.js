@@ -756,7 +756,6 @@ function createToolbar() {
     const mapSection = document.getElementById("map-section");
     if (!mapSection) return;
 
-    // Полностью удаляем старый тулбар, чтобы режимы не перемешивались
     if (drawToolbar) {
         drawToolbar.remove();
         drawToolbar = null;
@@ -765,15 +764,15 @@ function createToolbar() {
     drawToolbar = document.createElement("div");
     drawToolbar.id = "custom-draw-toolbar";
     drawToolbar.className = "draw-toolbar";
-    drawToolbar.addEventListener("click", function(e) { e.stopPropagation(); });
-    drawToolbar.addEventListener("mousedown", function(e) { e.stopPropagation(); });
+    drawToolbar.addEventListener("click", e => e.stopPropagation());
+    drawToolbar.addEventListener("mousedown", e => e.stopPropagation());
 
-    // КНОПКА ОТМЕНА (СЕРАЯ)
+    // === КНОПКА ОТМЕНА ===
     const btnCancel = document.createElement("button");
     btnCancel.id = "btn-cancel";
     btnCancel.className = "btn-finish";
-    btnCancel.style.background = "var(--secondary)";
-    btnCancel.style.color = "var(--foreground)";
+    btnCancel.style.background = "#333";
+    btnCancel.style.color = "#fff";
     btnCancel.innerHTML = "✕ Отмена";
     btnCancel.onclick = function(e) {
         e.stopPropagation();
@@ -788,13 +787,13 @@ function createToolbar() {
     };
     drawToolbar.appendChild(btnCancel);
 
-    // КНОПКА УДАЛИТЬ ТОЧКУ (ТОЛЬКО ДЛЯ РИСОВАНИЯ ПОЛИГОНА)
+    // === КНОПКА "УДАЛИТЬ ТОЧКУ" — только для рисования полигона ===
     if (currentMode === "polygon") {
         const btnUndo = document.createElement("button");
         btnUndo.id = "btn-undo";
         btnUndo.className = "btn-finish";
-        btnUndo.style.background = "var(--secondary)";
-        btnUndo.style.color = "var(--foreground)";
+        btnUndo.style.background = "#333";
+        btnUndo.style.color = "#fff";
         btnUndo.innerHTML = "↶ Удалить";
         btnUndo.onclick = function(e) {
             e.stopPropagation();
@@ -807,45 +806,46 @@ function createToolbar() {
         drawToolbar.appendChild(btnUndo);
     }
 
-// КНОПКА ГОТОВО (ФИОЛЕТОВАЯ)
+    // === КНОПКА "ГОТОВО" ===
     const btnFinish = document.createElement("button");
     btnFinish.id = "btn-finish";
     btnFinish.className = "btn-finish";
     btnFinish.style.background = "var(--primary)";
-    btnFinish.style.color = "var(--primary-foreground)";
-    
-    // ДОБАВЛЕНО: для редактирования просто кнопка, для рисования - со счетчиком
+    btnFinish.style.color = "#fff";
+
     if (currentMode === "edit") {
-        btnFinish.innerHTML = "✓ Готово";
+        btnFinish.innerHTML = "✓ Применить";
     } else {
-        btnFinish.innerHTML = "✓ Готово <span id='point-counter'>0/10</span>";
+        const maxPts = (currentMode === "rectangle") ? 2 : MAX_POINTS;
+        btnFinish.innerHTML = "✓ Готово <span id='point-counter'>0/" + maxPts + "</span>";
     }
 
     btnFinish.onclick = function(e) {
         e.stopPropagation();
         if (currentMode === "edit") {
             acceptEdit();
-        } else {
-            updatePointCount();
-            const minPts = (currentMode === "rectangle") ? 2 : 3;
-            if (pointCount < minPts) return;
-            
-            if (currentMode === "rectangle" && currentHandler) {
-                if (typeof currentHandler._completeFromClick === "function") {
-                    currentHandler._completeFromClick();
-                } else {
-                    currentHandler.disable();
-                }
-            } else if (currentHandler) {
-                if (typeof currentHandler.completeShape === "function") {
-                    currentHandler.completeShape();
-                } else {
-                    currentHandler.disable();
-                }
+            return;
+        }
+        updatePointCount();
+        const minPts = (currentMode === "rectangle") ? 2 : 3;
+        if (pointCount < minPts) return;
+
+        if (currentMode === "rectangle" && currentHandler) {
+            if (typeof currentHandler._completeFromClick === "function") {
+                currentHandler._completeFromClick();
+            } else {
+                currentHandler.disable();
+            }
+        } else if (currentHandler) {
+            if (typeof currentHandler.completeShape === "function") {
+                currentHandler.completeShape();
+            } else {
+                currentHandler.disable();
             }
         }
     };
     drawToolbar.appendChild(btnFinish);
+
     mapSection.appendChild(drawToolbar);
 
     startUIUpdater();
@@ -864,11 +864,6 @@ function killDrawing() {
     editMode = false;
 }
 
-// После создания кнопок:
-if (currentMode === "edit") {
-    const undoBtn = document.getElementById("btn-undo");
-    if (undoBtn) undoBtn.style.display = "none";
-}
 
 // ==================== ПАТЧ ПРЯМОУГОЛЬНИКА (ИСПРАВЛЕННЫЙ) ====================
 function patchRectangleTool() {
@@ -1024,96 +1019,106 @@ map.on('draw:drawstart', function(e) {
 
 
 // ==================== РЕДАКТИРОВАНИЕ ОБЛАСТИ ====================
-
-let editOriginalLayer = null;
 let editMode = false;
+let editBackupLatLngs = null;
 
 map.on('draw:editstart', function(e) {
     editMode = true;
     currentMode = "edit";
-    
-    // Визуальное отличие: делаем пунктир при редактировании
+
     const layer = drawnItems.getLayers()[0];
     if (layer) {
-        layer.setStyle({ dashArray: '10, 10' });
+        // сохраняем оригинал ДО редактирования
+        try {
+            editBackupLatLngs = JSON.parse(JSON.stringify(layer.getLatLngs()));
+        } catch (err) {
+            editBackupLatLngs = null;
+        }
+        // визуально помечаем что редактируется
+        layer.setStyle({ dashArray: '8,8' });
     }
 
-    createToolbar(); // Пересоздаем тулбар под 2 кнопки
-});
-
-// === Настраиваем тулбар под редактирование ===
-    const finishBtn = document.getElementById("btn-finish");
-    if (finishBtn) {
-        finishBtn.innerHTML = '✓ Применить';
-        finishBtn.style.background = ""; // Сбрасываем инлайн, чтобы сработал стандартный CSS
-        finishBtn.style.color = "";
-        finishBtn.style.opacity = "1";
-        finishBtn.style.pointerEvents = "auto";
-        finishBtn.style.cursor = "pointer";
-        finishBtn.onclick = function(e) {
-            e.stopPropagation();
-            acceptEdit();
-        };
-    }
-
-    const cancelBtn = document.getElementById("btn-cancel");
-    if (cancelBtn) {
-        cancelBtn.innerHTML = '✕ Отменить';
-        cancelBtn.style.background = "#333"; // Темный фон, как при отмене рисования
-        cancelBtn.style.color = "";
-        cancelBtn.style.opacity = "1";
-        cancelBtn.style.pointerEvents = "auto";
-        cancelBtn.onclick = function(e) {
-            e.stopPropagation();
-            cancelEdit();
-        };
-    }
-
-    // Оставляем только две кнопки, скрывая кнопку удаления точек
-    const undoBtn = document.getElementById("btn-undo");
-    if (undoBtn) undoBtn.style.display = "none";
-
+    createToolbar();
     updateToolbarUI();
 });
 
 function acceptEdit() {
     if (!editMode) return;
-    const editHandler = drawControl._toolbars.edit._modes.edit.handler;
-    if (editHandler) {
-        editHandler.save(); 
-        editHandler.disable();
+
+    try {
+        const editHandler = drawControl._toolbars.edit._modes.edit.handler;
+        if (editHandler) {
+            editHandler.save();
+            editHandler.disable();
+        }
+    } catch (err) {
+        console.warn("acceptEdit save error:", err);
     }
-    
-    // Возвращаем стиль области
+
+    // Возвращаем исходный стиль
     const layer = drawnItems.getLayers()[0];
     if (layer) {
-        layer.setStyle({ color: "#7c5cff", fill: "#7c5cff", fillOpacity: 0.15, dashArray: null });
+        layer.setStyle({
+            color: "#7c5cff",
+            fillColor: "#7c5cff",
+            fillOpacity: 0.15,
+            weight: 2,
+            dashArray: null
+        });
+        state.drawnLayer = layer;
+        const b = layer.getBounds();
+        state.bbox = b.getSouth() + "," + b.getWest() + "," + b.getNorth() + "," + b.getEast();
     }
-    
+
+    document.getElementById("actions-panel").style.display = "flex";
+    state.reportCache = null;
+
+    cleanupEditMarkers();
     killDrawing();
     editMode = false;
+    editBackupLatLngs = null;
+    addBotMessage("✅ Область обновлена");
 }
 
 function cancelEdit() {
     if (!editMode) return;
-    const editHandler = drawControl._toolbars.edit._modes.edit.handler;
-    if (editHandler) {
-        editHandler.revertLayers();
-        editHandler.disable();
+
+    try {
+        const editHandler = drawControl._toolbars.edit._modes.edit.handler;
+        if (editHandler) {
+            editHandler.revertLayers();
+            editHandler.disable();
+        }
+    } catch (err) {
+        console.warn("cancelEdit revert error:", err);
     }
 
-    // ВАЖНО: Принудительно убираем все маркеры редактирования из DOM
-    const editMarkers = document.querySelectorAll('.leaflet-editing-icon');
-    editMarkers.forEach(m => m.remove());
-
-    // Возвращаем стиль
     const layer = drawnItems.getLayers()[0];
-    if (layer) {
-        layer.setStyle({ color: "#7c5cff", fill: "#7c5cff", fillOpacity: 0.15, dashArray: null });
+    if (layer && editBackupLatLngs) {
+        try {
+            layer.setLatLngs(editBackupLatLngs);
+        } catch (err) {}
     }
-    
+    if (layer) {
+        layer.setStyle({
+            color: "#7c5cff",
+            fillColor: "#7c5cff",
+            fillOpacity: 0.15,
+            weight: 2,
+            dashArray: null
+        });
+    }
+
+    cleanupEditMarkers();
     killDrawing();
     editMode = false;
+    editBackupLatLngs = null;
+    addBotMessage("↩ Изменения отменены");
+}
+
+function cleanupEditMarkers() {
+    // Убираем оставшиеся handle-маркеры редактирования, если они зависли
+    document.querySelectorAll('.leaflet-editing-icon').forEach(m => m.remove());
 }
 
 map.on('draw:edited', function(e) {
