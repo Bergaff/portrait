@@ -857,6 +857,7 @@ function killDrawing() {
     currentMode = "";
     pointCount = 0;
     autoFinished = false;
+    editMode = false;
 }
 
 // ==================== ПАТЧ ПРЯМОУГОЛЬНИКА (ИСПРАВЛЕННЫЙ) ====================
@@ -1012,42 +1013,26 @@ map.on('draw:drawstart', function(e) {
 });
 
 
-// ==================== РЕДАКТИРОВАНИЕ ОБЛАСТИ С КНОПКАМИ ПРИНЯТЬ/ОТМЕНА ====================
-let editOriginalLayer = null;
-let editMode = false;
+// ==================== РЕДАКТИРОВАНИЕ ОБЛАСТИ ====================
 
 map.on('draw:editstart', function(e) {
-    console.log("EDIT START", e.layerType);
-    
-    // Сохраняем оригинальную геометрию
-    if (e.layer && e.layer.getLatLngs) {
-        if (Array.isArray(e.layer.getLatLngs()[0])) {
-            // Полигон
-            editOriginalLayer = JSON.parse(JSON.stringify(e.layer.getLatLngs()));
-        } else {
-            // Прямоугольник
-            editOriginalLayer = e.layer.getBounds();
-        }
-    }
-    
+    console.log("EDIT START");
     editMode = true;
     currentMode = "edit";
-    pointCount = 0;
-    
+
+    // Создаём тулбар с кнопками Принять / Отмена
     createToolbar();
-    updateToolbarUI();
-    
-    // Меняем текст кнопок для режима редактирования
+
     const finishBtn = document.getElementById("btn-finish");
     if (finishBtn) {
-        finishBtn.innerHTML = '✓ Принять <span id="point-counter">0</span>';
+        finishBtn.innerHTML = '✓ Принять';
         finishBtn.onclick = function(e) {
             e.stopPropagation();
             acceptEdit();
         };
     }
-    
-    const cancelBtn = document.getElementById("btn-cancel");
+
+    const cancelBtn = document.getElementById("btn-cancel") || document.getElementById("btn-undo");
     if (cancelBtn) {
         cancelBtn.innerHTML = '✕ Отмена';
         cancelBtn.onclick = function(e) {
@@ -1059,61 +1044,60 @@ map.on('draw:editstart', function(e) {
 
 function acceptEdit() {
     if (!editMode) return;
-    
-    // Сохраняем изменения
-    if (drawnItems.getLayers().length > 0) {
-        const layer = drawnItems.getLayers()[0];
+
+    const layers = drawnItems.getLayers();
+    if (layers.length > 0) {
+        const layer = layers[0];
         state.drawnLayer = layer;
-        
-        if (layer instanceof L.Rectangle) {
-            const bounds = layer.getBounds();
-            state.bbox = bounds.getSouth() + "," + bounds.getWest() + "," + bounds.getNorth() + "," + bounds.getEast();
-        } else if (layer instanceof L.Polygon) {
-            const bounds = layer.getBounds();
-            state.bbox = bounds.getSouth() + "," + bounds.getWest() + "," + bounds.getNorth() + "," + bounds.getEast();
-        }
-        
+
+        const b = layer.getBounds();
+        state.bbox = `${b.getSouth()},${b.getWest()},${b.getNorth()},${b.getEast()}`;
+
         document.getElementById("actions-panel").style.display = "flex";
         state.reportCache = null;
-        
-        addBotMessage("✅ Изменения приняты");
+        addBotMessage("✅ Изменения области приняты");
     }
-    
+
     killDrawing();
+    editMode = false;
 }
 
 function cancelEdit() {
-    if (!editMode || !editOriginalLayer) return;
-    
-    // Восстанавливаем оригинальную геометрию
-    if (drawnItems.getLayers().length > 0) {
-        const layer = drawnItems.getLayers()[0];
-        
-        if (layer instanceof L.Rectangle && editOriginalLayer instanceof L.LatLngBounds) {
-            layer.setBounds(editOriginalLayer);
-        } else if (layer instanceof L.Polygon && Array.isArray(editOriginalLayer[0])) {
-            layer.setLatLngs(editOriginalLayer);
-        }
-        
-        addBotMessage("❌ Изменения отменены");
-    }
-    
+    if (!editMode) return;
+
+    // Leaflet.Draw сам откатит изменения при отмене, но мы дополнительно обновляем состояние
+    addBotMessage("❌ Редактирование отменено");
     killDrawing();
+    editMode = false;
+
+    // Пересчитываем bbox из текущего слоя (если он остался)
+    const layers = drawnItems.getLayers();
+    if (layers.length > 0) {
+        const b = layers[0].getBounds();
+        state.bbox = `${b.getSouth()},${b.getWest()},${b.getNorth()},${b.getEast()}`;
+    }
 }
 
-map.on('draw:editstop', function(e) {
+map.on('draw:editstop', function() {
     console.log("EDIT STOP");
-    if (editMode) {
-        killDrawing();
-    }
+    killDrawing();
+    editMode = false;
 });
 
 map.on('draw:edited', function(e) {
-    console.log("EDITED");
-    if (editMode) {
-        // Если событие прошло через стандартный механизм Leaflet.draw
-        killDrawing();
-    }
+    console.log("DRAW:EDITED");
+    const layers = e.layers.getLayers ? e.layers.getLayers() : [];
+    if (layers.length === 0) return;
+
+    const layer = layers[0];
+    state.drawnLayer = layer;
+
+    const b = layer.getBounds();
+    state.bbox = `${b.getSouth()},${b.getWest()},${b.getNorth()},${b.getEast()}`;
+
+    document.getElementById("actions-panel").style.display = "flex";
+    state.reportCache = null;
+    addBotMessage("✅ Область обновлена");
 });
 
 
