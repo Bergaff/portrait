@@ -700,7 +700,8 @@ function updatePointCount() {
 }
 
 function updateToolbarUI() {
-    if (currentMode === "edit") return; // Блокируем сброс кнопок в режиме редактирования
+    if (currentMode === "edit") return; // Отключаем счетчик для редактирования
+
     updatePointCount();
 
     const counter = document.getElementById("point-counter");
@@ -752,97 +753,98 @@ function stopUIUpdater() {
 }
 
 function createToolbar() {
-    // Если тулбар уже существует, просто показываем его
-    if (drawToolbar) {
-        drawToolbar.style.display = "flex";
-        startUIUpdater();
-        updateToolbarUI();
-        return;
-    }
-
     const mapSection = document.getElementById("map-section");
     if (!mapSection) return;
+
+    // Полностью удаляем старый тулбар, чтобы режимы не перемешивались
+    if (drawToolbar) {
+        drawToolbar.remove();
+        drawToolbar = null;
+    }
 
     drawToolbar = document.createElement("div");
     drawToolbar.id = "custom-draw-toolbar";
     drawToolbar.className = "draw-toolbar";
+    drawToolbar.addEventListener("click", function(e) { e.stopPropagation(); });
+    drawToolbar.addEventListener("mousedown", function(e) { e.stopPropagation(); });
 
-    // Отменяем всплытие событий
-    drawToolbar.addEventListener("click", function(e) {
-        e.stopPropagation();
-    });
-    drawToolbar.addEventListener("mousedown", function(e) {
-        e.stopPropagation();
-    });
-
-    // КНОПКА ОТМЕНА
+    // КНОПКА ОТМЕНА (СЕРАЯ)
     const btnCancel = document.createElement("button");
-    btnCancel.id = "btn-cancel"; // ДОБАВЛЕН ID
+    btnCancel.id = "btn-cancel";
     btnCancel.className = "btn-finish";
-    btnCancel.style.background = "#333";
+    btnCancel.style.background = "var(--secondary)";
+    btnCancel.style.color = "var(--foreground)";
     btnCancel.innerHTML = "✕ Отмена";
     btnCancel.onclick = function(e) {
         e.stopPropagation();
-        if (currentHandler) {
-            try {
-                currentHandler.disable();
-            } catch (ex) {
-                console.warn("Disable failed:", ex);
+        if (currentMode === "edit") {
+            cancelEdit();
+        } else {
+            if (currentHandler) {
+                try { currentHandler.disable(); } catch (ex) {}
             }
+            killDrawing();
         }
-        killDrawing();
     };
+    drawToolbar.appendChild(btnCancel);
 
-    // КНОПКА УДАЛИТЬ ТОЧКУ
-    const btnUndo = document.createElement("button");
-    btnUndo.id = "btn-undo";
-    btnUndo.className = "btn-finish";
-    btnUndo.style.background = "#333";
-    btnUndo.innerHTML = "↶ Удалить";
-    btnUndo.onclick = function(e) {
-        e.stopPropagation();
-        if (currentMode === "polygon" && currentHandler) {
-            if (typeof currentHandler.deleteLastVertex === "function") {
+    // КНОПКА УДАЛИТЬ ТОЧКУ (ТОЛЬКО ДЛЯ РИСОВАНИЯ ПОЛИГОНА)
+    if (currentMode === "polygon") {
+        const btnUndo = document.createElement("button");
+        btnUndo.id = "btn-undo";
+        btnUndo.className = "btn-finish";
+        btnUndo.style.background = "var(--secondary)";
+        btnUndo.style.color = "var(--foreground)";
+        btnUndo.innerHTML = "↶ Удалить";
+        btnUndo.onclick = function(e) {
+            e.stopPropagation();
+            if (currentHandler && typeof currentHandler.deleteLastVertex === "function") {
                 currentHandler.deleteLastVertex();
                 updatePointCount();
                 updateToolbarUI();
             }
-        }
-    };
+        };
+        drawToolbar.appendChild(btnUndo);
+    }
 
-    // КНОПКА ГОТОВО
+    // КНОПКА ГОТОВО (ФИОЛЕТОВАЯ)
     const btnFinish = document.createElement("button");
     btnFinish.id = "btn-finish";
     btnFinish.className = "btn-finish";
-    btnFinish.innerHTML = "✓ Готово <span id='point-counter'>0/10</span>";
+    btnFinish.style.background = "var(--primary)";
+    btnFinish.style.color = "var(--primary-foreground)";
+    
+    // В режиме редактирования нет счетчика точек
+    if (currentMode === "edit") {
+        btnFinish.innerHTML = "✓ Готово";
+    } else {
+        btnFinish.innerHTML = "✓ Готово <span id='point-counter'>0/10</span>";
+    }
+
     btnFinish.onclick = function(e) {
         e.stopPropagation();
-        updatePointCount();
-        const minPts = (currentMode === "rectangle") ? 2 : 3;
-        if (pointCount < minPts) {
-            console.warn("Not enough points:", pointCount, "min:", minPts);
-            return;
-        }
-
-        if (currentMode === "rectangle" && currentHandler) {
-            // Завершаем прямоугольник
-            if (typeof currentHandler._completeFromClick === "function") {
-                currentHandler._completeFromClick();
-            } else {
-                currentHandler.disable();
-            }
-        } else if (currentHandler) {
-            // Завершаем многоугольник
-            if (typeof currentHandler.completeShape === "function") {
-                currentHandler.completeShape();
-            } else {
-                currentHandler.disable();
+        if (currentMode === "edit") {
+            acceptEdit();
+        } else {
+            updatePointCount();
+            const minPts = (currentMode === "rectangle") ? 2 : 3;
+            if (pointCount < minPts) return;
+            
+            if (currentMode === "rectangle" && currentHandler) {
+                if (typeof currentHandler._completeFromClick === "function") {
+                    currentHandler._completeFromClick();
+                } else {
+                    currentHandler.disable();
+                }
+            } else if (currentHandler) {
+                if (typeof currentHandler.completeShape === "function") {
+                    currentHandler.completeShape();
+                } else {
+                    currentHandler.disable();
+                }
             }
         }
     };
-
-    drawToolbar.appendChild(btnCancel);
-    drawToolbar.appendChild(btnUndo);
     drawToolbar.appendChild(btnFinish);
     mapSection.appendChild(drawToolbar);
 
@@ -1041,7 +1043,9 @@ map.on('draw:editstart', function(e) {
         }
     }
 
+    // Тулбар теперь сам знает, что в режиме edit нужно отдать только 2 кнопки
     createToolbar();
+});
 
 // === Настраиваем тулбар под редактирование ===
     const finishBtn = document.getElementById("btn-finish");
@@ -1081,13 +1085,14 @@ map.on('draw:editstart', function(e) {
 function acceptEdit() {
     if (!editMode) return;
     try {
-        // Правильное завершение редактирования Leaflet (убирает контрольные точки)
-        // Обработка данных (state.bbox и т.д.) произойдет автоматически в событии 'draw:edited'
-        drawControl._toolbars.edit._modes.edit.handler.save();
+        const editHandler = drawControl._toolbars.edit._modes.edit.handler;
+        if (editHandler) {
+            editHandler.save();       // Правильно сохраняет и убирает маркеры
+            editHandler.disable();    // Отключает режим
+        }
     } catch (e) {
-        console.warn(e);
+        console.warn("Edit save error:", e);
     }
-    addBotMessage("✅ Изменения применены");
     killDrawing();
     editMode = false;
 }
@@ -1095,22 +1100,17 @@ function acceptEdit() {
 function cancelEdit() {
     if (!editMode) return;
     try {
-        // Правильная отмена встроенными средствами Leaflet (возвращает форму и убирает точки)
-        drawControl._toolbars.edit._modes.edit.handler.revertLayers();
+        const editHandler = drawControl._toolbars.edit._modes.edit.handler;
+        if (editHandler) {
+            editHandler.revertLayers(); // Возвращает старую форму и убирает маркеры
+            editHandler.disable();      // Отключает режим
+        }
     } catch (e) {
-        console.warn(e);
+        console.warn("Edit cancel error:", e);
     }
-    addBotMessage("❌ Изменения отменены");
     killDrawing();
     editMode = false;
 }
-map.on('draw:editstop', function() {
-    console.log("EDIT STOP");
-    if (editMode) {
-        killDrawing();
-        editMode = false;
-    }
-});
 
 map.on('draw:edited', function(e) {
     console.log("DRAW:EDITED");
