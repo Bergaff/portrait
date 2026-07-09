@@ -199,9 +199,6 @@ function processOAuthCallback() {
 
     // Проверяем все возможные варианты recovery-ссылки
     const isRecovery =
-
-    // Проверяем все возможные варианты recovery-ссылки
-    const isRecovery =
         sp.get("reset") === "1" ||
         sp.get("type") === "recovery" ||
         hp.get("type") === "recovery" ||
@@ -214,7 +211,6 @@ function processOAuthCallback() {
             if (modal) {
                 modal.style.display = "flex";
                 lucide.createIcons();
-                // Очищаем URL, чтобы не показывать модалку при каждом обновлении
                 window.history.replaceState({}, document.title, window.location.pathname);
             }
         }, 200);
@@ -226,6 +222,8 @@ function processOAuthCallback() {
         window.history.replaceState({}, document.title, window.location.pathname);
         return;
     }
+    // ... дальше идет код if (code && sp.get("state") === "mailru") ... НЕ ТРОГАЙ ЕГО
+    
     if (code && sp.get("state") === "mailru") {
         saveMapPosition();
         window.history.replaceState({}, document.title, window.location.pathname);
