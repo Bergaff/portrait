@@ -1152,4 +1152,14 @@ input {
     spellcheck: false;
 }
 
+.draw-toolbar button {
+    background: var(--secondary);
+    color: var(--foreground);
+    border: 1px solid var(--border);
+}
+
+.draw-toolbar button.btn-finish {
+    background: var(--primary) !important;
+    color: var(--primary-foreground) !important;
+}
 
