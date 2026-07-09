@@ -807,14 +807,14 @@ function createToolbar() {
         drawToolbar.appendChild(btnUndo);
     }
 
-    // КНОПКА ГОТОВО (ФИОЛЕТОВАЯ)
+// КНОПКА ГОТОВО (ФИОЛЕТОВАЯ)
     const btnFinish = document.createElement("button");
     btnFinish.id = "btn-finish";
     btnFinish.className = "btn-finish";
     btnFinish.style.background = "var(--primary)";
     btnFinish.style.color = "var(--primary-foreground)";
     
-    // В режиме редактирования нет счетчика точек
+    // ДОБАВЛЕНО: для редактирования просто кнопка, для рисования - со счетчиком
     if (currentMode === "edit") {
         btnFinish.innerHTML = "✓ Готово";
     } else {
@@ -1029,22 +1029,16 @@ let editOriginalLayer = null;
 let editMode = false;
 
 map.on('draw:editstart', function(e) {
-    console.log("EDIT START");
     editMode = true;
     currentMode = "edit";
-
-    // Сохраняем оригинальную геометрию
+    
+    // Визуальное отличие: делаем пунктир при редактировании
     const layer = drawnItems.getLayers()[0];
     if (layer) {
-        if (layer instanceof L.Rectangle) {
-            editOriginalLayer = L.latLngBounds(layer.getBounds());
-        } else if (layer.getLatLngs) {
-            editOriginalLayer = JSON.parse(JSON.stringify(layer.getLatLngs()));
-        }
+        layer.setStyle({ dashArray: '10, 10' });
     }
 
-    // Тулбар теперь сам знает, что в режиме edit нужно отдать только 2 кнопки
-    createToolbar();
+    createToolbar(); // Пересоздаем тулбар под 2 кнопки
 });
 
 // === Настраиваем тулбар под редактирование ===
@@ -1084,30 +1078,40 @@ map.on('draw:editstart', function(e) {
 
 function acceptEdit() {
     if (!editMode) return;
-    try {
-        const editHandler = drawControl._toolbars.edit._modes.edit.handler;
-        if (editHandler) {
-            editHandler.save();       // Правильно сохраняет и убирает маркеры
-            editHandler.disable();    // Отключает режим
-        }
-    } catch (e) {
-        console.warn("Edit save error:", e);
+    const editHandler = drawControl._toolbars.edit._modes.edit.handler;
+    if (editHandler) {
+        editHandler.save(); 
+        editHandler.disable();
     }
+    
+    // Возвращаем стиль области
+    const layer = drawnItems.getLayers()[0];
+    if (layer) {
+        layer.setStyle({ color: "#7c5cff", fill: "#7c5cff", fillOpacity: 0.15, dashArray: null });
+    }
+    
     killDrawing();
     editMode = false;
 }
 
 function cancelEdit() {
     if (!editMode) return;
-    try {
-        const editHandler = drawControl._toolbars.edit._modes.edit.handler;
-        if (editHandler) {
-            editHandler.revertLayers(); // Возвращает старую форму и убирает маркеры
-            editHandler.disable();      // Отключает режим
-        }
-    } catch (e) {
-        console.warn("Edit cancel error:", e);
+    const editHandler = drawControl._toolbars.edit._modes.edit.handler;
+    if (editHandler) {
+        editHandler.revertLayers();
+        editHandler.disable();
     }
+
+    // ВАЖНО: Принудительно убираем все маркеры редактирования из DOM
+    const editMarkers = document.querySelectorAll('.leaflet-editing-icon');
+    editMarkers.forEach(m => m.remove());
+
+    // Возвращаем стиль
+    const layer = drawnItems.getLayers()[0];
+    if (layer) {
+        layer.setStyle({ color: "#7c5cff", fill: "#7c5cff", fillOpacity: 0.15, dashArray: null });
+    }
+    
     killDrawing();
     editMode = false;
 }
