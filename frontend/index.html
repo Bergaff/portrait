@@ -6,7 +6,7 @@
     <title>Atlas — Портрет квартала</title>
     <link rel="icon" type="image/png" href="/static/favicon.png">
     <link rel="shortcut icon" type="image/png" href="/favicon.png">
-    <link rel="stylesheet" href="/css/style.css?v=3">
+    <link rel="stylesheet" href="/css/style.css?v=4">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
     <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css">
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -61,6 +61,9 @@
                 <span class="header-badge">v1.85</span>
             </div>
     <div class="header-right">
+        <button id="help-btn" onclick="toggleHelp()" title="Как пользоваться">
+            <i data-lucide="help-circle"></i>
+        </button>
         <div class="search-box">
             <i data-lucide="search" class="search-icon"></i>
             <input type="text" id="search-input" placeholder="Поиск места..." class="search-input" autocomplete="new-password" name="unique_search_id_8829" readonly onfocus="this.removeAttribute('readonly');">
@@ -92,10 +95,20 @@
                         <span><span class="legend-dot mid"></span>Средняя</span>
                         <span><span class="legend-dot low"></span>Низкая</span>
                     </div>
-                <!-- Ручка для открытия чата на мобильных -->
+                <!-- Мобильная ручка и оверлей — В КОРНЕ #app -->
                 <div id="mobile-handle" title="AI-чат">
-                <i data-lucide="message-circle"></i>
+                    <i data-lucide="message-circle"></i>
                 </div>
+
+                <div id="mobile-overlay">
+                    <div id="mobile-content">
+                        <div id="mobile-header">
+                            <span>AI-урбанист</span>
+                            <div id="mobile-close" style="cursor:pointer;font-size:14px;font-weight:600;">← Карта</div>
+                        </div>
+                        <div id="mobile-body" style="flex:1;overflow-y:auto;padding:0;display:flex;flex-direction:column;">
+                        </div>
+                    </div>
                 </div>
             </section>
 
@@ -289,7 +302,7 @@
     const SUPABASE_URL = "https://epjtzfhlyyrzmcjqqlyw.supabase.co";
     const SUPABASE_KEY = "sb_publishable_yj38_Ym2C8_Sm-MN-icfSw_URGS-h-J";
 </script>
-<script src="/js/app.js?v=3"></script>
+<script src="/js/app.js?v=4"></script>
 <script>lucide.createIcons();</script>
 </body>
 </html>
