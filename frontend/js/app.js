@@ -194,6 +194,11 @@ function loginMailruDirect() {
 function processOAuthCallback() {
     const sp = new URLSearchParams(window.location.search);
     const hp = new URLSearchParams(window.location.hash.substring(1));
+    const code = sp.get("code");
+    const error = sp.get("error");
+
+    // Проверяем все возможные варианты recovery-ссылки
+    const isRecovery =
 
     // Проверяем все возможные варианты recovery-ссылки
     const isRecovery =
@@ -216,13 +221,6 @@ function processOAuthCallback() {
         return;
     }
 
-    // Обработка восстановления пароля
-    const recoveryType = hp.get("type");
-    if (recoveryType === "recovery") {
-        document.getElementById("reset-password-modal").style.display = "flex";
-        lucide.createIcons();
-        return;
-    }
     if (error) {
         showAuthError("Ошибка: " + error);
         window.history.replaceState({}, document.title, window.location.pathname);
@@ -2007,6 +2005,10 @@ async function askQuick(q) {
 document.getElementById("chat-input").addEventListener("keypress", e => { if (e.key === "Enter" && !state.chatBusy) sendMessage(); });
 document.addEventListener("click", e => { if (!e.target.closest(".search-box")) document.getElementById("search-results").innerHTML = ""; });
 
+function toggleHelp() {
+    const p = document.getElementById("help-popup");
+    if (p) p.style.display = p.style.display === "none" ? "flex" : "none";
+}
 function markdownToHtml(t) {
     if (!t) return "";
     return t.replace(/^## (.+)$/gm, "<h2>$1</h2>")
