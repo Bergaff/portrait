@@ -1011,6 +1011,115 @@ map.on('draw:drawstart', function(e) {
     updateToolbarUI();
 });
 
+
+// ==================== РЕДАКТИРОВАНИЕ ОБЛАСТИ С КНОПКАМИ ПРИНЯТЬ/ОТМЕНА ====================
+let editOriginalLayer = null;
+let editMode = false;
+
+map.on('draw:editstart', function(e) {
+    console.log("EDIT START", e.layerType);
+    
+    // Сохраняем оригинальную геометрию
+    if (e.layer && e.layer.getLatLngs) {
+        if (Array.isArray(e.layer.getLatLngs()[0])) {
+            // Полигон
+            editOriginalLayer = JSON.parse(JSON.stringify(e.layer.getLatLngs()));
+        } else {
+            // Прямоугольник
+            editOriginalLayer = e.layer.getBounds();
+        }
+    }
+    
+    editMode = true;
+    currentMode = "edit";
+    pointCount = 0;
+    
+    createToolbar();
+    updateToolbarUI();
+    
+    // Меняем текст кнопок для режима редактирования
+    const finishBtn = document.getElementById("btn-finish");
+    if (finishBtn) {
+        finishBtn.innerHTML = '✓ Принять <span id="point-counter">0</span>';
+        finishBtn.onclick = function(e) {
+            e.stopPropagation();
+            acceptEdit();
+        };
+    }
+    
+    const cancelBtn = document.getElementById("btn-cancel");
+    if (cancelBtn) {
+        cancelBtn.innerHTML = '✕ Отмена';
+        cancelBtn.onclick = function(e) {
+            e.stopPropagation();
+            cancelEdit();
+        };
+    }
+});
+
+function acceptEdit() {
+    if (!editMode) return;
+    
+    // Сохраняем изменения
+    if (drawnItems.getLayers().length > 0) {
+        const layer = drawnItems.getLayers()[0];
+        state.drawnLayer = layer;
+        
+        if (layer instanceof L.Rectangle) {
+            const bounds = layer.getBounds();
+            state.bbox = bounds.getSouth() + "," + bounds.getWest() + "," + bounds.getNorth() + "," + bounds.getEast();
+        } else if (layer instanceof L.Polygon) {
+            const bounds = layer.getBounds();
+            state.bbox = bounds.getSouth() + "," + bounds.getWest() + "," + bounds.getNorth() + "," + bounds.getEast();
+        }
+        
+        document.getElementById("actions-panel").style.display = "flex";
+        state.reportCache = null;
+        
+        addBotMessage("✅ Изменения приняты");
+    }
+    
+    killDrawing();
+}
+
+function cancelEdit() {
+    if (!editMode || !editOriginalLayer) return;
+    
+    // Восстанавливаем оригинальную геометрию
+    if (drawnItems.getLayers().length > 0) {
+        const layer = drawnItems.getLayers()[0];
+        
+        if (layer instanceof L.Rectangle && editOriginalLayer instanceof L.LatLngBounds) {
+            layer.setBounds(editOriginalLayer);
+        } else if (layer instanceof L.Polygon && Array.isArray(editOriginalLayer[0])) {
+            layer.setLatLngs(editOriginalLayer);
+        }
+        
+        addBotMessage("❌ Изменения отменены");
+    }
+    
+    killDrawing();
+}
+
+map.on('draw:editstop', function(e) {
+    console.log("EDIT STOP");
+    if (editMode) {
+        killDrawing();
+    }
+});
+
+map.on('draw:edited', function(e) {
+    console.log("EDITED");
+    if (editMode) {
+        // Если событие прошло через стандартный механизм Leaflet.draw
+        killDrawing();
+    }
+});
+
+
+
+
+
 // События для многоугольника (при добавлении вершины)
 map.on('draw:drawvertex', function(e) {
     console.log("DRAW:DRAWVERTEX");
@@ -2138,7 +2247,31 @@ setTimeout(() => {
 }, 100);
 
 
+function togglePasswordVisibility() {
+    var pw = document.getElementById("auth-password");
+    var btn = document.querySelector("#auth-modal .btn-toggle-pw");
+    if (!pw) return;
+    if (pw.type === "password") {
+        pw.type = "text";
+        if (btn) btn.innerHTML = "👁";
+    } else {
+        pw.type = "password";
+        if (btn) btn.innerHTML = "👁";
+    }
+}
 
+function toggleNewPasswordVisibility() {
+    var pw = document.getElementById("new-password-input");
+    var btn = document.querySelector("#reset-password-modal .btn-toggle-pw");
+    if (!pw) return;
+    if (pw.type === "password") {
+        pw.type = "text";
+        if (btn) btn.innerHTML = "🙈";
+    } else {
+        pw.type = "password";
+        if (btn) btn.innerHTML = "👁";
+    }
+}
 
 document.addEventListener('DOMContentLoaded', function() {
     document.querySelectorAll('input').forEach(function(input) {
