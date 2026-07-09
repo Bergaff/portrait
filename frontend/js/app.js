@@ -700,6 +700,7 @@ function updatePointCount() {
 }
 
 function updateToolbarUI() {
+    if (currentMode === "edit") return; // Блокируем сброс кнопок в режиме редактирования
     updatePointCount();
 
     const counter = document.getElementById("point-counter");
@@ -776,6 +777,7 @@ function createToolbar() {
 
     // КНОПКА ОТМЕНА
     const btnCancel = document.createElement("button");
+    btnCancel.id = "btn-cancel"; // ДОБАВЛЕН ID
     btnCancel.className = "btn-finish";
     btnCancel.style.background = "#333";
     btnCancel.innerHTML = "✕ Отмена";
@@ -858,6 +860,12 @@ function killDrawing() {
     pointCount = 0;
     autoFinished = false;
     editMode = false;
+}
+
+// После создания кнопок:
+if (currentMode === "edit") {
+    const undoBtn = document.getElementById("btn-undo");
+    if (undoBtn) undoBtn.style.display = "none";
 }
 
 // ==================== ПАТЧ ПРЯМОУГОЛЬНИКА (ИСПРАВЛЕННЫЙ) ====================
@@ -1013,101 +1021,89 @@ map.on('draw:drawstart', function(e) {
 });
 
 
-// ==================== РЕДАКТИРОВАНИЕ ОБЛАСТИ (ИСПРАВЛЕННАЯ ВЕРСИЯ) ====================
+// ==================== РЕДАКТИРОВАНИЕ ОБЛАСТИ ====================
 
+let editOriginalLayer = null;
 let editMode = false;
-let originalLayerState = null;
 
 map.on('draw:editstart', function(e) {
     console.log("EDIT START");
     editMode = true;
     currentMode = "edit";
 
-    // Сохраняем оригинальное состояние для отмены
-    const layer = e.layer || (drawnItems.getLayers()[0]);
+    // Сохраняем оригинальную геометрию
+    const layer = drawnItems.getLayers()[0];
     if (layer) {
         if (layer instanceof L.Rectangle) {
-            originalLayerState = layer.getBounds();
-        } else if (layer instanceof L.Polygon) {
-            originalLayerState = JSON.parse(JSON.stringify(layer.getLatLngs()));
+            editOriginalLayer = L.latLngBounds(layer.getBounds());
+        } else if (layer.getLatLngs) {
+            editOriginalLayer = JSON.parse(JSON.stringify(layer.getLatLngs()));
         }
     }
 
     createToolbar();
 
-    // Настраиваем кнопки тулбара
+// === Настраиваем тулбар под редактирование ===
     const finishBtn = document.getElementById("btn-finish");
     if (finishBtn) {
-        finishBtn.innerHTML = '✓ Принять изменения';
-        finishBtn.style.background = '#22c55e';
+        finishBtn.innerHTML = '✓ Применить';
+        finishBtn.style.background = ""; // Сбрасываем инлайн, чтобы сработал стандартный CSS
+        finishBtn.style.color = "";
+        finishBtn.style.opacity = "1";
+        finishBtn.style.pointerEvents = "auto";
+        finishBtn.style.cursor = "pointer";
         finishBtn.onclick = function(e) {
             e.stopPropagation();
             acceptEdit();
         };
     }
 
-    const cancelBtn = document.getElementById("btn-cancel") || document.getElementById("btn-undo");
+    const cancelBtn = document.getElementById("btn-cancel");
     if (cancelBtn) {
-        cancelBtn.innerHTML = '✕ Отменить изменения';
-        cancelBtn.style.background = '#ef4444';
+        cancelBtn.innerHTML = '✕ Отменить';
+        cancelBtn.style.background = "#333"; // Темный фон, как при отмене рисования
+        cancelBtn.style.color = "";
+        cancelBtn.style.opacity = "1";
+        cancelBtn.style.pointerEvents = "auto";
         cancelBtn.onclick = function(e) {
             e.stopPropagation();
             cancelEdit();
         };
     }
 
+    // Оставляем только две кнопки, скрывая кнопку удаления точек
+    const undoBtn = document.getElementById("btn-undo");
+    if (undoBtn) undoBtn.style.display = "none";
+
     updateToolbarUI();
 });
 
 function acceptEdit() {
     if (!editMode) return;
-
-    const layers = drawnItems.getLayers();
-    if (layers.length > 0) {
-        const layer = layers[0];
-        state.drawnLayer = layer;
-
-        const b = layer.getBounds();
-        state.bbox = `${b.getSouth()},${b.getWest()},${b.getNorth()},${b.getEast()}`;
-
-        document.getElementById("actions-panel").style.display = "flex";
-        state.reportCache = null;
-        addBotMessage("✅ Изменения области сохранены");
+    try {
+        // Правильное завершение редактирования Leaflet (убирает контрольные точки)
+        // Обработка данных (state.bbox и т.д.) произойдет автоматически в событии 'draw:edited'
+        drawControl._toolbars.edit._modes.edit.handler.save();
+    } catch (e) {
+        console.warn(e);
     }
-
+    addBotMessage("✅ Изменения применены");
     killDrawing();
     editMode = false;
-    originalLayerState = null;
 }
 
 function cancelEdit() {
-    if (!editMode || !originalLayerState) {
-        killDrawing();
-        return;
+    if (!editMode) return;
+    try {
+        // Правильная отмена встроенными средствами Leaflet (возвращает форму и убирает точки)
+        drawControl._toolbars.edit._modes.edit.handler.revertLayers();
+    } catch (e) {
+        console.warn(e);
     }
-
-    const layers = drawnItems.getLayers();
-    if (layers.length > 0) {
-        const layer = layers[0];
-
-        if (layer instanceof L.Rectangle && originalLayerState instanceof L.LatLngBounds) {
-            layer.setBounds(originalLayerState);
-        } else if (layer instanceof L.Polygon && Array.isArray(originalLayerState)) {
-            layer.setLatLngs(originalLayerState);
-        }
-
-        // Обновляем bbox после отката
-        const b = layer.getBounds();
-        state.bbox = `${b.getSouth()},${b.getWest()},${b.getNorth()},${b.getEast()}`;
-
-        addBotMessage("❌ Изменения отменены — возвращено исходное состояние");
-    }
-
+    addBotMessage("❌ Изменения отменены");
     killDrawing();
     editMode = false;
-    originalLayerState = null;
 }
-
 map.on('draw:editstop', function() {
     console.log("EDIT STOP");
     if (editMode) {
