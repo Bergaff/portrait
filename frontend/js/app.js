@@ -672,6 +672,8 @@ let currentMode = "";
 let pointCount = 0;
 let uiUpdater = null;
 let autoFinished = false;
+let editMode = false;
+let editBackupLatLngs = null;
 
 function updatePointCount() {
     if (!currentHandler) { pointCount = 0; return; }
@@ -1019,8 +1021,7 @@ map.on('draw:drawstart', function(e) {
 
 
 // ==================== РЕДАКТИРОВАНИЕ ОБЛАСТИ ====================
-let editMode = false;
-let editBackupLatLngs = null;
+
 
 map.on('draw:editstart', function(e) {
     editMode = true;
