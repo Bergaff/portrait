@@ -1015,17 +1015,31 @@ map.on('draw:drawstart', function(e) {
 
 // ==================== РЕДАКТИРОВАНИЕ ОБЛАСТИ ====================
 
+let editOriginalLayer = null;
+let editMode = false;
+
 map.on('draw:editstart', function(e) {
     console.log("EDIT START");
     editMode = true;
     currentMode = "edit";
 
-    // Создаём тулбар с кнопками Принять / Отмена
+    // Сохраняем оригинальное состояние для отмены
+    const layer = e.layer || (drawnItems.getLayers()[0]);
+    if (layer) {
+        if (layer instanceof L.Rectangle) {
+            editOriginalLayer = L.latLngBounds(layer.getBounds());
+        } else if (layer.getLatLngs) {
+            editOriginalLayer = JSON.parse(JSON.stringify(layer.getLatLngs()));
+        }
+    }
+
     createToolbar();
 
+    // Настраиваем кнопки тулбара под редактирование
     const finishBtn = document.getElementById("btn-finish");
     if (finishBtn) {
-        finishBtn.innerHTML = '✓ Принять';
+        finishBtn.innerHTML = '✓ Принять изменения';
+        finishBtn.style.background = "#10b981";
         finishBtn.onclick = function(e) {
             e.stopPropagation();
             acceptEdit();
@@ -1034,12 +1048,14 @@ map.on('draw:editstart', function(e) {
 
     const cancelBtn = document.getElementById("btn-cancel") || document.getElementById("btn-undo");
     if (cancelBtn) {
-        cancelBtn.innerHTML = '✕ Отмена';
+        cancelBtn.innerHTML = '✕ Отменить';
         cancelBtn.onclick = function(e) {
             e.stopPropagation();
             cancelEdit();
         };
     }
+
+    updateToolbarUI();
 });
 
 function acceptEdit() {
@@ -1051,11 +1067,11 @@ function acceptEdit() {
         state.drawnLayer = layer;
 
         const b = layer.getBounds();
-        state.bbox = `${b.getSouth()},${b.getWest()},${b.getNorth()},${b.getEast()}`;
+        state.bbox = `${b.getSouth().toFixed(6)},${b.getWest().toFixed(6)},${b.getNorth().toFixed(6)},${b.getEast().toFixed(6)}`;
 
         document.getElementById("actions-panel").style.display = "flex";
         state.reportCache = null;
-        addBotMessage("✅ Изменения области приняты");
+        addBotMessage("✅ Изменения области сохранены");
     }
 
     killDrawing();
@@ -1063,22 +1079,32 @@ function acceptEdit() {
 }
 
 function cancelEdit() {
-    if (!editMode) return;
+    if (!editMode || !editOriginalLayer) {
+        killDrawing();
+        return;
+    }
 
-    // Leaflet.Draw сам откатит изменения при отмене, но мы дополнительно обновляем состояние
-    addBotMessage("❌ Редактирование отменено");
-    killDrawing();
-    editMode = false;
-
-    // Пересчитываем bbox из текущего слоя (если он остался)
     const layers = drawnItems.getLayers();
     if (layers.length > 0) {
-        const b = layers[0].getBounds();
-        state.bbox = `${b.getSouth()},${b.getWest()},${b.getNorth()},${b.getEast()}`;
+        const layer = layers[0];
+
+        if (layer instanceof L.Rectangle && editOriginalLayer instanceof L.LatLngBounds) {
+            layer.setBounds(editOriginalLayer);
+        } else if (layer instanceof L.Polygon && Array.isArray(editOriginalLayer)) {
+            layer.setLatLngs(editOriginalLayer);
+        }
+
+        // Обновляем bbox
+        const b = layer.getBounds();
+        state.bbox = `${b.getSouth().toFixed(6)},${b.getWest().toFixed(6)},${b.getNorth().toFixed(6)},${b.getEast().toFixed(6)}`;
+        addBotMessage("❌ Изменения отменены, возвращена исходная область");
     }
+
+    killDrawing();
+    editMode = false;
 }
 
-map.on('draw:editstop', function() {
+map.on('draw:editstop', function(e) {
     console.log("EDIT STOP");
     killDrawing();
     editMode = false;
@@ -1086,18 +1112,17 @@ map.on('draw:editstop', function() {
 
 map.on('draw:edited', function(e) {
     console.log("DRAW:EDITED");
-    const layers = e.layers.getLayers ? e.layers.getLayers() : [];
+    const layers = e.layers && e.layers.getLayers ? e.layers.getLayers() : [];
     if (layers.length === 0) return;
 
     const layer = layers[0];
     state.drawnLayer = layer;
 
     const b = layer.getBounds();
-    state.bbox = `${b.getSouth()},${b.getWest()},${b.getNorth()},${b.getEast()}`;
+    state.bbox = `${b.getSouth().toFixed(6)},${b.getWest().toFixed(6)},${b.getNorth().toFixed(6)},${b.getEast().toFixed(6)}`;
 
     document.getElementById("actions-panel").style.display = "flex";
     state.reportCache = null;
-    addBotMessage("✅ Область обновлена");
 });
 
 
