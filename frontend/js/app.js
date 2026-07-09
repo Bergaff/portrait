@@ -38,9 +38,7 @@ const initTheme = document.body.getAttribute("data-theme") || "dark";
 const initTileUrl = initTheme === "light"
     ? "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
     : "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png";
-window.currentTileLayer = L.tileLayer(initTileUrl, {
-    attribution: "OpenStreetMap, CARTO", maxZoom: 19
-}).addTo(map);
+window.currentTileLayer = L.tileLayer(initTileUrl, { attribution: "OpenStreetMap, CARTO", maxZoom: 19 }).addTo(map);
 window.map = map;
 
 
@@ -192,28 +190,31 @@ function loginMailruDirect() {
 }
 
 function processOAuthCallback() {
-    const sp = new URLSearchParams(window.location.search);
-    const hp = new URLSearchParams(window.location.hash.substring(1));
-    const code = sp.get("code");
-    const error = sp.get("error");
+    var sp = new URLSearchParams(window.location.search);
+    var hp = new URLSearchParams(window.location.hash.substring(1));
 
-    // Проверяем все возможные варианты recovery-ссылки
-    const isRecovery =
+    var code = sp.get("code");
+    var error = sp.get("error");
+
+    var isRecovery =
         sp.get("reset") === "1" ||
+        sp.get("reset_password") === "1" ||
         sp.get("type") === "recovery" ||
         hp.get("type") === "recovery" ||
         localStorage.getItem("qp_recovery_pending") === "1";
 
     if (isRecovery) {
         localStorage.removeItem("qp_recovery_pending");
-        setTimeout(() => {
-            const modal = document.getElementById("reset-password-modal");
+
+        setTimeout(function() {
+            var modal = document.getElementById("reset-password-modal");
             if (modal) {
                 modal.style.display = "flex";
-                lucide.createIcons();
+                if (typeof lucide !== "undefined") lucide.createIcons();
                 window.history.replaceState({}, document.title, window.location.pathname);
             }
         }, 200);
+
         return;
     }
 
@@ -222,37 +223,69 @@ function processOAuthCallback() {
         window.history.replaceState({}, document.title, window.location.pathname);
         return;
     }
-    // ... дальше идет код if (code && sp.get("state") === "mailru") ... НЕ ТРОГАЙ ЕГО
-    
+
     if (code && sp.get("state") === "mailru") {
         saveMapPosition();
         window.history.replaceState({}, document.title, window.location.pathname);
         showAuthError("Входим через Mail.ru...");
+
         fetch("/api/auth/mailru", {
-            method: "POST", headers: { "Content-Type": "application/json" },
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ access_token: "code_" + code })
-        }).then(r => r.json()).then(d => {
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
             if (d.email && d.temp_password) {
-                return supabaseClient.auth.signInWithPassword({ email: d.email, password: d.temp_password });
-            } else showAuthError("Ошибка: " + (d.detail || "unknown"));
-        }).then(() => window.location.reload())
-        .catch(e => { console.error(e); showAuthError("Ошибка входа"); });
+                return supabaseClient.auth.signInWithPassword({
+                    email: d.email,
+                    password: d.temp_password
+                });
+            } else {
+                showAuthError("Ошибка: " + (d.detail || "unknown"));
+            }
+        })
+        .then(function() {
+            window.location.reload();
+        })
+        .catch(function(e) {
+            console.error(e);
+            showAuthError("Ошибка входа");
+        });
+
         return;
     }
-    const at = hp.get("access_token");
+
+    var at = hp.get("access_token");
+
     if (at && hp.get("state") === "yandex") {
         saveMapPosition();
         window.location.hash = "";
         showAuthError("Входим через Яндекс...");
+
         fetch("/api/auth/yandex", {
-            method: "POST", headers: { "Content-Type": "application/json" },
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ access_token: at })
-        }).then(r => r.json()).then(d => {
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
             if (d.email && d.temp_password) {
-                return supabaseClient.auth.signInWithPassword({ email: d.email, password: d.temp_password });
-            } else showAuthError("Ошибка: " + (d.detail || "unknown"));
-        }).then(() => window.location.reload())
-        .catch(e => { console.error(e); showAuthError("Ошибка входа"); });
+                return supabaseClient.auth.signInWithPassword({
+                    email: d.email,
+                    password: d.temp_password
+                });
+            } else {
+                showAuthError("Ошибка: " + (d.detail || "unknown"));
+            }
+        })
+        .then(function() {
+            window.location.reload();
+        })
+        .catch(function(e) {
+            console.error(e);
+            showAuthError("Ошибка входа");
+        });
     }
 }
 
@@ -1848,6 +1881,7 @@ function addLoading() {
 
 function removeLoading() { const el = document.getElementById("loading-msg"); if (el) el.remove(); }
 
+
 function setChatBusy(b) {
     state.chatBusy = b;
     document.querySelectorAll(".btn-chip").forEach(x => { x.disabled = b; x.style.opacity = b ? "0.4" : "1"; });
@@ -1981,10 +2015,7 @@ function toggleHelp() {
     if (p) p.style.display = p.style.display === "none" ? "flex" : "none";
 }
 
-function toggleHelp() {
-    const p = document.getElementById("help-popup");
-    if (p) p.style.display = p.style.display === "none" ? "flex" : "none";
-}
+
 
 function markdownToHtml(t) {
     if (!t) return "";
