@@ -194,11 +194,11 @@ function loginMailruDirect() {
 function processOAuthCallback() {
     const sp = new URLSearchParams(window.location.search);
     const hp = new URLSearchParams(window.location.hash.substring(1));
-    
+
     // Проверяем все возможные варианты recovery-ссылки
-    const isRecovery = 
-        sp.get("reset") === "1" || 
-        sp.get("type") === "recovery" || 
+    const isRecovery =
+        sp.get("reset") === "1" ||
+        sp.get("type") === "recovery" ||
         hp.get("type") === "recovery" ||
         localStorage.getItem("qp_recovery_pending") === "1";
 
