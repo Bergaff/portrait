@@ -868,23 +868,42 @@ function killDrawing() {
 }
 
 function showAnalyzeToolbar() {
-    // на десктопе не показываем - используется sidebar
     if (window.innerWidth > 920) return;
+    console.log("showAnalyzeToolbar called, width =", window.innerWidth, "bbox =", state.bbox);
+
     hideAnalyzeToolbar();
+
     const mapSection = document.getElementById("map-section");
-    if (!mapSection) return;
+    if (!mapSection || !state.bbox) return;
+
     analyzeToolbar = document.createElement("div");
     analyzeToolbar.id = "custom-analyze-toolbar";
     analyzeToolbar.className = "analyze-toolbar";
+
     analyzeToolbar.innerHTML = `
-      <div class="btn-with-info"><button class="btn-primary" onclick="openAnalyzeModal('free')">Анализ <span class="btn-tag tag-free">FREE</span></button><div class="info-tooltip-trigger" data-tooltip="Базовый OSM анализ, быстро и бесплатно"><i data-lucide="help-circle" style="width:14px;height:14px"></i></div></div>
-      <div class="btn-with-info"><button class="btn-outline" onclick="openAnalyzeModal('pro')">PRO</button><div class="info-tooltip-trigger" data-tooltip="Яндекс.Карты + рейтинги + ИИ отзывов"><i data-lucide="help-circle" style="width:14px;height:14px"></i></div></div>
-      <button class="btn-ghost" onclick="clearDrawnArea()">✕</button>
+        <button class="btn-primary" onclick="openAnalyzeModal('free')">
+            <i data-lucide="activity"></i>
+            Анализ
+            <span class="btn-tag tag-free">FREE</span>
+        </button>
+
+        <button class="btn-outline" onclick="openAnalyzeModal('pro')">
+            <i data-lucide="sparkles"></i>
+            Премиум
+            <span class="btn-tag tag-pro">PRO</span>
+        </button>
+
+        <button class="btn-ghost analyze-close-btn" onclick="clearDrawnArea()">✕</button>
     `;
-    analyzeToolbar.addEventListener("click", e => e.stopPropagation());
-    analyzeToolbar.addEventListener("mousedown", e => e.stopPropagation());
+
+    analyzeToolbar.addEventListener("click", function(e) { e.stopPropagation(); });
+    analyzeToolbar.addEventListener("mousedown", function(e) { e.stopPropagation(); });
+
     mapSection.appendChild(analyzeToolbar);
-    if (typeof lucide !== "undefined") lucide.createIcons();
+
+    if (typeof lucide !== "undefined") {
+        lucide.createIcons();
+    }
 }
 
 function hideAnalyzeToolbar() {
