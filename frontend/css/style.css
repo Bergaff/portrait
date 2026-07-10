@@ -1163,3 +1163,66 @@ input {
     color: var(--primary-foreground) !important;
 }
 
+
+
+
+/* --- Красные ошибки в стиле сайта --- */
+#auth-error, #reset-password-error {
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+  background: oklch(0.65 0.22 25 / 0.12);
+  border: 1px solid oklch(0.65 0.22 25 / 0.22);
+  color: oklch(0.78 0.18 25);
+  padding: 10px 12px;
+  border-radius: 10px;
+  margin: 8px 0;
+  min-height: auto;
+  display: none;
+  word-break: break-word;
+}
+#auth-error:not(:empty), #reset-password-error:not(:empty) {
+  display: block;
+}
+
+/* Ошибки в чате */
+.msg-assistant.msg-error {
+  border-left: 3px solid var(--destructive);
+  background: oklch(0.65 0.22 25 / 0.12);
+}
+
+/* Тулбар анализа как у рисования */
+.analyze-toolbar {
+  position: absolute;
+  bottom: 28px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1200;
+  display: flex;
+  gap: 8px;
+  padding: 10px 12px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+  animation: slideUp 0.2s ease;
+}
+.analyze-toolbar .btn-primary,
+.analyze-toolbar .btn-outline {
+  padding: 8px 12px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+@media (max-width: 920px) {
+  .analyze-toolbar {
+    bottom: 20px;
+    width: calc(100% - 70px);
+    max-width: 340px;
+    justify-content: center;
+  }
+}
+
+
+
+
+
