@@ -667,6 +667,7 @@ map.addControl(drawControl);
 // ==================== ДОРАБОТКА РИСОВАНИЯ (ФИНАЛЬНАЯ ИСПРАВЛЕННАЯ ВЕРСИЯ) ====================
 const MAX_POINTS = 10;
 let drawToolbar = null;
+let analyzeToolbar = null;
 let currentHandler = null;
 let currentMode = "";
 let pointCount = 0;
@@ -866,7 +867,41 @@ function killDrawing() {
     editMode = false;
 }
 
+function showAnalyzeToolbar() {
+    // на десктопе не показываем - используется sidebar
+    if (window.innerWidth > 920) return;
+    hideAnalyzeToolbar();
+    const mapSection = document.getElementById("map-section");
+    if (!mapSection) return;
+    analyzeToolbar = document.createElement("div");
+    analyzeToolbar.id = "custom-analyze-toolbar";
+    analyzeToolbar.className = "analyze-toolbar";
+    analyzeToolbar.innerHTML = `
+      <div class="btn-with-info"><button class="btn-primary" onclick="openAnalyzeModal('free')">Анализ <span class="btn-tag tag-free">FREE</span></button><div class="info-tooltip-trigger" data-tooltip="Базовый OSM анализ, быстро и бесплатно"><i data-lucide="help-circle" style="width:14px;height:14px"></i></div></div>
+      <div class="btn-with-info"><button class="btn-outline" onclick="openAnalyzeModal('pro')">PRO</button><div class="info-tooltip-trigger" data-tooltip="Яндекс.Карты + рейтинги + ИИ отзывов"><i data-lucide="help-circle" style="width:14px;height:14px"></i></div></div>
+      <button class="btn-ghost" onclick="clearDrawnArea()">✕</button>
+    `;
+    analyzeToolbar.addEventListener("click", e => e.stopPropagation());
+    analyzeToolbar.addEventListener("mousedown", e => e.stopPropagation());
+    mapSection.appendChild(analyzeToolbar);
+    if (typeof lucide !== "undefined") lucide.createIcons();
+}
 
+function hideAnalyzeToolbar() {
+    if (analyzeToolbar) {
+        analyzeToolbar.remove();
+        analyzeToolbar = null;
+    }
+}
+
+function clearDrawnArea() {
+    drawnItems.clearLayers();
+    state.bbox = null;
+    state.drawnLayer = null;
+    hideAnalyzeToolbar();
+    document.getElementById("actions-panel").style.display = "none";
+    addBotMessage("Область удалена");
+}
 // ==================== ПАТЧ ПРЯМОУГОЛЬНИКА (ИСПРАВЛЕННЫЙ) ====================
 function patchRectangleTool() {
     if (L.Draw.Rectangle.prototype._patched) return;
@@ -984,6 +1019,7 @@ patchRectangleTool();
 
 // ==================== СОБЫТИЯ РИСОВАНИЯ ====================
 map.on('draw:drawstart', function(e) {
+    
     console.log("DRAW:DRAWSTART", e.layerType);
 
     if (e.layerType !== "polygon" && e.layerType !== "rectangle") return;
@@ -1017,6 +1053,7 @@ map.on('draw:drawstart', function(e) {
 
     createToolbar();
     updateToolbarUI();
+    hideAnalyzeToolbar();
 });
 
 
@@ -1038,7 +1075,7 @@ map.on('draw:editstart', function(e) {
         // визуально помечаем что редактируется
         layer.setStyle({ dashArray: '8,8' });
     }
-
+    hideAnalyzeToolbar();
     createToolbar();
     updateToolbarUI();
 });
@@ -1161,9 +1198,13 @@ map.on("draw:created", function(e) {
     state.drawnLayer = e.layer;
     var b = e.layer.getBounds();
     state.bbox = b.getSouth() + "," + b.getWest() + "," + b.getNorth() + "," + b.getEast();
-    document.getElementById("actions-panel").style.display = "flex";
     state.reportCache = null;
     killDrawing();
+    if (window.innerWidth <= 920) {
+        showAnalyzeToolbar();
+    } else {
+        document.getElementById("actions-panel").style.display = "flex";
+    }
 });
 
 map.on("draw:deleted", function(e) {
@@ -1176,6 +1217,7 @@ map.on("draw:deleted", function(e) {
     state.drawnLayer = null;
     document.getElementById("actions-panel").style.display = "none";
     addBotMessage("Область удалена. Теперь можно выбрать новую.");
+    hideAnalyzeToolbar();
 });
 
 map.on("draw:edited", function(e) {
@@ -1984,7 +2026,8 @@ function addBotMessage(t) {
     state.chatHistory.push({ role: "assistant", content: t });
     const c = document.getElementById("chat-messages");
     const d = document.createElement("div");
-    d.className = "message msg-assistant";
+    const isError = t.trim().startsWith("✗") || t.trim().startsWith("⚠") || t.trim().startsWith("🔒") || t.trim().startsWith("⏱");
+    d.className = "message msg-assistant" + (isError ? " msg-error" : "");
     d.innerHTML = markdownToHtml(t);
     c.appendChild(d);
     c.scrollTop = c.scrollHeight;
